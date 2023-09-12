@@ -5,6 +5,7 @@ clear; close all;              % clear current variables and close figures
 cal_sequence=1;                % set ==1, if processing Duke calibration sequence. If !=0, assume Duke Dixon sequence
 first_frames=5;                % number of initial fids to plot typically 5-20
 ymax = 1;                      % if !=1, then set y-axis scale of first figure to this value
+num_cal_gas_fids=15;           % number of gas FIDs at end of calibration sequence
 
 %% Select MRD file and extract header
 [file, path] = uigetfile('*.*', 'Select file'); % open UI for selecting file, starts in current dir
@@ -38,6 +39,17 @@ end
 % if data from GE scanner, take complex conjugate
 if strcmp(vendor,'ge')
     fids = conj(fids);
+end
+
+% extract gas and dissolved FIDs separately
+if cal_sequence==1
+    % if calibration sequence, all gas FIDs are at the end
+    fids_gas = fids(:, end-num_cal_gas_fids+1:end);
+    fids_dis = fids(:, 1:end-num_cal_gas_fids);
+else
+    % if dixon sequence, gas and dissolved are interleaved
+    fids_gas = fids(:, 1:2:end);
+    fids_dis = fids(:, 2:2:end);
 end
 
 %% Extract key header variables
@@ -135,7 +147,7 @@ fprintf('\tNum pts in FID (npts) = %0.0f\n',npts);
 %% Plot a select number of first FIDs sequentially
 
 % initialize figure
-h1=figure;
+h=figure;
 
 % check if number of requested fids exceeds number of total fids
 if first_frames>nfids
@@ -164,7 +176,7 @@ fprintf('RMS signal of first frames = %3.3e\n',rms(abs(fids(1:first_frames*npts)
 %% Plot all FIDs sequentially
 
 % initialize figure
-h2=figure;
+h=figure;
 
 % plot all FIDs sequentially
 plot(abs(fids(1:end))); 
@@ -179,7 +191,7 @@ box on
 %% Plot all FIDs overlapping (to look for noise)
 
 % initialize figure
-h3=figure;
+h=figure;
 
 % plot all FIDs overlapping
 plot(abs(fids)); 
@@ -190,14 +202,44 @@ end
 % set title and axis labels
 xlabel('points')
 ylabel('magnitude')
-a=sprintf('%s All Dixon FIDS Overlapping', strrep(file, '_', '\_'));
+a=sprintf('%s All FIDs Overlapping', strrep(file, '_', '\_'));
+title(a)
+box on
+
+%% Plot all FIDs overlapping, separating gas and dissolved
+
+% initialize gas FID figure
+h=figure;
+% plot all gas FIDs overlapping
+plot(abs(fids_gas)); 
+if ymax ~= 1
+    ylim([0 ymax])
+end
+% set title and axis labels
+xlabel('points')
+ylabel('magnitude')
+a=sprintf('%s All Gas FIDs Overlapping', strrep(file, '_', '\_'));
+title(a)
+box on
+
+% initialize dissolved FID figure
+h=figure;
+% plot all dissolved FIDs overlapping
+plot(abs(fids_dis)); 
+if ymax ~= 1
+    ylim([0 ymax])
+end
+% set title and axis labels
+xlabel('points')
+ylabel('magnitude')
+a=sprintf('%s All Dissolved FIDs Overlapping', strrep(file, '_', '\_'));
 title(a)
 box on
 
 %% Plot real and imaginary parts of signal
 
 % initialize figure
-h4=figure;
+h=figure;
 ax1=subplot(311);
 
 % plot real part of signal

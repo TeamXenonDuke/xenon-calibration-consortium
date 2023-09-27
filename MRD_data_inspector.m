@@ -70,9 +70,11 @@ switch vendor
         else
             tr = 2 * str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in s
         end
+        tr = tr * 1e3; % convert s to ms
 
         % TE90
         te90 = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TE.Text); % in s
+        te90 = te90 * 1e3; % convert s to ms
 
         % dwell time
         dwell_time = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1,1}.value.Text);
@@ -109,11 +111,9 @@ switch vendor
         else
             tr = 2 * str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in ms
         end
-        tr = tr * 1e-3; % convert ms to s
 
         % TE90
         te90 = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TE.Text); % in ms
-        te90 = te90 * 1e-3; % convert ms to s
 
         % dwell time
         dwell_time = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble.value.Text);
@@ -135,11 +135,9 @@ switch vendor
 
         % TR
         tr = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in ms
-        tr = tr * 1e-3; % convert ms to s
 
         % TE90
         te90 = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TE.Text); % in ms
-        te90 = te90 * 1e-3; % convert ms to s
 
         % dwell_time
         dwell_time = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1,1}.value.Text);
@@ -168,9 +166,9 @@ fprintf('\tStudy date = %s\n',study_date');
 fprintf('\tGas frequency = %0.0f Hz\n',gas_freq);
 fprintf('\tDissolved frequency = %0.0f Hz\n',dis_freq);
 fprintf('\tRF excitation = %0.0f ppm\n',rf_excitation);
-fprintf('\tTR = %0.1f ms\n',tr*1e3);
-fprintf('\tTE90 = %0.3f ms\n',te90*1e3);
-fprintf('\tDwell time = %0.0f us\n',dwell_time);
+fprintf('\tTR = %0.1f ms\n',tr);
+fprintf('\tTE90 = %0.3f ms\n',te90);
+fprintf('\tDwell time = %0.2f us\n',dwell_time);
 fprintf('\tNum FIDs = %0.0f\n',nfids);
 fprintf('\tNum pts in FID (npts) = %0.0f\n',npts);
 

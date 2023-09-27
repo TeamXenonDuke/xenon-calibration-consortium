@@ -129,6 +129,36 @@ switch vendor
                 % study date
                 study_date = mrd_header.ismrmrdHeader.measurementInformation.seriesDate.Text;
         end
+    case 'siemens'
+        % patient ID
+        patient_id = mrd_header.ismrmrdHeader.subjectInformation.patientID.Text;
+
+        % TR
+        tr = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in ms
+        tr = tr * 1e-3; % convert ms to s
+
+        % TE90
+        te90 = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TE.Text); % in ms
+        te90 = te90 * 1e-3; % convert ms to s
+
+        % dwell_time
+        dwell_time = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1,1}.value.Text);
+        if cal_sequence~=1
+            dwell_time = dwell_time * 1e-1; % convert 100s of nanoseconds to us
+        end
+
+        % excitation frequencies
+        if cal_sequence==1
+            gas_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 2}.value.Text);
+            dis_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
+        else
+            gas_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
+            dis_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 4}.value.Text);
+        end
+        rf_excitation = (dis_freq - gas_freq)/(gyro_ratio * mag_strength);
+
+        % study date
+        study_date = mrd_header.ismrmrdHeader.studyInformation.studyDate.Text;
 end
 
 % print out key header variables

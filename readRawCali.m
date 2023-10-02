@@ -56,7 +56,7 @@ switch file_extension
         scanDateStr = [scanDate(1:4), '-', scanDate(5:6), '-', scanDate(7:8)];
         if isfield(twix_obj.hdr.Phoenix, 'sWiPMemBlock')
             % Duke twix file
-            if isfield(twix_obj.hdr.Phoenix.sWiPMemBlock, 'adFree')
+            if and(isfield(twix_obj.hdr.Phoenix.sWiPMemBlock, 'adFree'), length(twix_obj.hdr.Phoenix.sWiPMemBlock.adFree)>3)
                 VRef = twix_obj.hdr.Phoenix.sWiPMemBlock.adFree{4};
                 % seems to be in all sequences
                 %rf_amp1 = twix_obj.hdr.Phoenix.sTXSPEC.aRFPULSE{1}.flAmplitude;

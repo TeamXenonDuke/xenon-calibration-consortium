@@ -2,7 +2,7 @@
 
 %% Set flag arguments
 clear; close all;              % clear current variables and close figures
-cal_sequence=1;                % set ==1, if processing Duke calibration sequence. If !=0, assume Duke Dixon sequence
+cal_sequence=1;                % set ==1, if processing Duke calibration sequence. If !=1, assume Duke Dixon sequence
 first_frames=5;                % number of initial fids to plot typically 5-20
 ymax = 1;                      % if !=1, then set y-axis scale of first figure to this value
 num_cal_gas_fids=15;           % number of gas FIDs at end of calibration sequence
@@ -58,6 +58,20 @@ end
 gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla
 mag_strength = str2double(mrd_header.ismrmrdHeader.acquisitionSystemInformation.systemFieldStrengthu_T.Text); % field strength in T
 
+% flip angle
+try
+    gas_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg(1).Text);
+catch
+    gas_flip = nan;
+    disp('No gas flip angle found')
+end
+try
+    dis_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg(2).Text);
+catch
+    dis_flip = nan;
+    disp('No dissolved flip angle found')
+end
+
 % variables with vendor and site-specific units and locations in header (ew how disgusting)
 switch vendor
     case 'ge'
@@ -95,7 +109,7 @@ switch vendor
                 % study date
                 study_date = nan;
             case "St. Joseph's Healthcare Hamilton"
-                % study date=
+                % study date
                 study_date = mrd_header.ismrmrdHeader.studyInformation.studyDate.Text;
             case "University of Sheffield"
                 % study date
@@ -171,6 +185,8 @@ fprintf('\tTE90 = %0.3f ms\n',te90);
 fprintf('\tDwell time = %0.2f us\n',dwell_time);
 fprintf('\tNum FIDs = %0.0f\n',nfids);
 fprintf('\tNum pts in FID (npts) = %0.0f\n',npts);
+fprintf('\tGas flip angle = %0.1f°\n', gas_flip);
+fprintf('\tDissolved flip angle = %0.1f°\n', dis_flip);
 
 %% Plot a select number of first FIDs sequentially
 

@@ -60,13 +60,13 @@ mag_strength = str2double(mrd_header.ismrmrdHeader.acquisitionSystemInformation.
 
 % flip angle
 try
-    gas_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg(1).Text);
+    gas_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg{1}.Text);
 catch
     gas_flip = nan;
     disp('No gas flip angle found')
 end
 try
-    dis_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg(2).Text);
+    dis_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg{2}.Text);
 catch
     dis_flip = nan;
     disp('No dissolved flip angle found')

@@ -2,196 +2,136 @@
 
 %% Set flag arguments
 clear; close all;              % clear current variables and close figures
-cal_sequence=1;                % set ==1, if processing Duke calibration sequence. If !=1, assume Duke Dixon sequence
 first_frames=5;                % number of initial fids to plot typically 5-20
-ymax = 1;                      % if !=1, then set y-axis scale of first figure to this value
-num_cal_gas_fids=15;           % number of gas FIDs at end of calibration sequence
 
-%% Select MRD file and extract header
+%% Select MRD file
 [file, path] = uigetfile('*.*', 'Select file'); % open UI for selecting file, starts in current dir
 file_with_path = strcat(path, file); % join path and file to open
+dataset = ismrmrd.Dataset(file_with_path, 'dataset');
+ismrmrd_header = ismrmrd.xml.deserialize(dataset.readxml);
+%% Extract key header variables
 
-% extract MRD header
-mrd_header = xml2struct(h5read(file_with_path, '/dataset/xml'));
+% convert user parameter fields to maps for easy query
+traj_description_user_params = containers.Map();
+data_struct = ismrmrd_header.encoding.trajectoryDescription.userParameterLong;
+for i = 1:numel(data_struct)
+    traj_description_user_params(data_struct(i).name) = data_struct(i).value;
+end
 
-% vendor and institution name
-vendor = lower(mrd_header.ismrmrdHeader.acquisitionSystemInformation.systemVendor.Text);
-institution = mrd_header.ismrmrdHeader.acquisitionSystemInformation.institutionName.Text;
-
-%% Extract FID data
-
-% read k-space data
-all_kspace_data = h5read(file_with_path, '/dataset/data').data;
-
-% reshape k-space data
-npts = size(all_kspace_data{1}, 1) / 2;
-nfids = size(all_kspace_data, 1);
-fids = [];
-for k = 1:nfids
-    fid = all_kspace_data{k};
-    i = 1;
-    for j = 1:npts
-        fids(j, k) = double(complex(fid(i), fid(i+1)));
-        i = i + 2;
+if contains(file, "dixon") || contains(file, "calibration")
+    general_user_params = containers.Map();
+    data_struct = ismrmrd_header.userParameters.userParameterLong;
+    for i = 1:numel(data_struct)
+        general_user_params(data_struct(i).name) = data_struct(i).value;
     end
 end
+
+% general variables
+study_date = ismrmrd_header.studyInformation.studyDate; % in YYYY-MM-DD
+try
+    patient_id = ismrmrd_header.subjectInformation.patientID;
+catch
+    patient_id = nan;
+    disp("No patient ID found.")
+end
+vendor = ismrmrd_header.acquisitionSystemInformation.systemVendor;
+institution = ismrmrd_header.acquisitionSystemInformation.institutionName;
+field_strength = ismrmrd_header.acquisitionSystemInformation.systemFieldStrength_T; % in T
+te90 = ismrmrd_header.sequenceParameters.TE; % in us
+sample_time = dataset.readAcquisition().head.sample_time_us(1); % in us
+ramp_time = traj_description_user_params("ramp_time"); % in us
+fov = [ismrmrd_header.encoding.reconSpace.fieldOfView_mm.x, ...
+    ismrmrd_header.encoding.reconSpace.fieldOfView_mm.y, ...
+    ismrmrd_header.encoding.reconSpace.fieldOfView_mm.z]; % in mm
+
+% scan-specific variables
+if contains(file, 'proton')
+    tr_proton = ismrmrd_header.sequenceParameters.TR(1); % in ms
+    flip_angle_proton = ismrmrd_header.sequenceParameters.flipAngle_deg(1); % in degrees
+    matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
+elseif contains(file, 'dixon')
+    freq_center = general_user_params("129Xe_center_frequency"); % in Hz
+    freq_dis_excitation_hz = general_user_params("129Xe_dissolved_offset_frequency"); % in Hz
+    tr_gas = ismrmrd_header.sequenceParameters.TR(1);
+    tr_dissolved = ismrmrd_header.sequenceParameters.TR(2);
+    flip_angle_gas = ismrmrd_header.sequenceParameters.flipAngle_deg(1);
+    flip_angle_dissolved = ismrmrd_header.sequenceParameters.flipAngle_deg(2);
+    matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
+elseif contains(file, "calibration")
+    freq_center = general_user_params("129Xe_center_frequency"); % in Hz
+    freq_dis_excitation_hz = general_user_params("129Xe_dissolved_offset_frequency"); % in Hz
+    tr_gas = ismrmrd_header.sequenceParameters.TR(1);
+    tr_dissolved = ismrmrd_header.sequenceParameters.TR(2);
+    flip_angle_gas = ismrmrd_header.sequenceParameters.flipAngle_deg(1);
+    flip_angle_dissolved = ismrmrd_header.sequenceParameters.flipAngle_deg(2);
+    matrix_size_z = nan;
+end
+
+% calculate RF excitation in ppm
+if contains(file, "dixon") || contains(file, "calibration")
+    gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla
+    rf_excitation = freq_dis_excitation_hz/(gyro_ratio * field_strength);
+end
+
+%% Extract FID acquisition data and trajectories
+
+% read k-space data
+fids = cell2mat(dataset.readAcquisition().data);
+npts = size(fids, 1);
+nfids = size(fids, 2);
 
 % if data from GE scanner, take complex conjugate
 if strcmp(vendor,'ge')
     fids = conj(fids);
 end
 
-% extract gas and dissolved FIDs separately
-if cal_sequence==1
-    % if calibration sequence, all gas FIDs are at the end
-    fids_gas = fids(:, end-num_cal_gas_fids+1:end);
-    fids_dis = fids(:, 1:end-num_cal_gas_fids);
-else
-    % if dixon sequence, gas and dissolved are interleaved
-    fids_gas = fids(:, 1:2:end);
-    fids_dis = fids(:, 2:2:end);
+% read trajectory data
+traj_cell = dataset.readAcquisition().traj;
+traj = zeros(nfids, npts, 3);
+for i=1:nfids
+    traj(i,:,:) = transpose(double(traj_cell{i}));
 end
 
-%% Extract key header variables
+% get contrast and bonus spectra labels
+contrast_labels = dataset.readAcquisition().head.idx.contrast;
+bonus_spectra_labels = dataset.readAcquisition().head.measurement_uid;
 
-% magnetic field strength
-gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla
-mag_strength = str2double(mrd_header.ismrmrdHeader.acquisitionSystemInformation.systemFieldStrengthu_T.Text); % field strength in T
+%% print out key variables
 
-% flip angle
-try
-    gas_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg{1}.Text);
-catch
-    gas_flip = nan;
-    disp('No gas flip angle found')
-end
-try
-    dis_flip = str2double(mrd_header.ismrmrdHeader.sequenceParameters.flipAngleu_deg{2}.Text);
-catch
-    dis_flip = nan;
-    disp('No dissolved flip angle found')
-end
-
-% variables with vendor and site-specific units and locations in header (ew how disgusting)
-switch vendor
-    case 'ge'
-        % patient ID
-        patient_id = mrd_header.ismrmrdHeader.subjectInformation.patientID.Text;
-
-        % TR
-        if cal_sequence==1
-            tr = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in s
-        else
-            tr = 2 * str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in s
-        end
-        tr = tr * 1e3; % convert s to ms
-
-        % TE90
-        te90 = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TE.Text); % in s
-        te90 = te90 * 1e3; % convert s to ms
-
-        % dwell time
-        dwell_time = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1,1}.value.Text);
-
-        % excitation frequencies
-        if cal_sequence==1
-            gas_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 2}.value.Text);
-            dis_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
-        else
-            gas_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
-            dis_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 4}.value.Text);
-        end
-        rf_excitation = (dis_freq - gas_freq)/(gyro_ratio * mag_strength);
-
-        % institution-specific variables
-        switch institution
-            case "University of Iowa"
-                % study date
-                study_date = nan;
-            case "St. Joseph's Healthcare Hamilton"
-                % study date
-                study_date = mrd_header.ismrmrdHeader.studyInformation.studyDate.Text;
-            case "University of Sheffield"
-                % study date
-                study_date = mrd_header.ismrmrdHeader.studyInformation.studyDate.Text;
-        end
-    case 'philips'
-        % patient ID
-        patient_id = nan;
-
-        % TR
-        if cal_sequence==1
-            tr = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in ms
-        else
-            tr = 2 * str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in ms
-        end
-
-        % TE90
-        te90 = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TE.Text); % in ms
-
-        % dwell time
-        dwell_time = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble.value.Text);
-
-        % excitation frequencies
-        gas_freq = str2double(mrd_header.ismrmrdHeader.userParameters.userParameterLong.value.Text); % in Hz
-        dis_freq = nan;
-        rf_excitation = str2double(mrd_header.ismrmrdHeader.userParameters.userParameterDouble.value.Text);
-
-        % institution-specific variables
-        switch institution
-            case {"CCHMC", "Cincinnati"}
-                % study date
-                study_date = mrd_header.ismrmrdHeader.measurementInformation.seriesDate.Text;
-        end
-    case 'siemens'
-        % patient ID
-        patient_id = mrd_header.ismrmrdHeader.subjectInformation.patientID.Text;
-
-        % TR
-        tr = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TR.Text); % in ms
-
-        % TE90
-        te90 = str2double(mrd_header.ismrmrdHeader.sequenceParameters.TE.Text); % in ms
-
-        % dwell_time
-        dwell_time = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1,1}.value.Text);
-        if cal_sequence~=1
-            dwell_time = dwell_time * 1e-1; % convert 100s of nanoseconds to us
-        end
-
-        % excitation frequencies
-        if cal_sequence==1
-            gas_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 2}.value.Text);
-            dis_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
-        else
-            gas_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
-            dis_freq = str2double(mrd_header.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 4}.value.Text);
-        end
-        rf_excitation = (dis_freq - gas_freq)/(gyro_ratio * mag_strength);
-
-        % study date
-        study_date = mrd_header.ismrmrdHeader.studyInformation.studyDate.Text;
-end
-
-% print out key header variables
-fprintf('\tFile = %s\n',file');
-fprintf('\tPatient ID = %s\n',patient_id');
-fprintf('\tStudy date = %s\n',study_date');
-fprintf('\tGas frequency = %0.0f Hz\n',gas_freq);
-fprintf('\tDissolved frequency = %0.0f Hz\n',dis_freq);
-fprintf('\tRF excitation = %0.0f ppm\n',rf_excitation);
-fprintf('\tTR = %0.1f ms\n',tr);
+% general variables
+fprintf('\tFile = %s\n',file);
+fprintf('\tPatient ID = %s\n',patient_id);
+fprintf('\tStudy date = %s\n',study_date);
+fprintf('\tSystem vendor = %s\n',vendor);
+fprintf('\tInstitution = %s\n',institution);
+fprintf('\tField strength = %0.2f T\n',field_strength);
 fprintf('\tTE90 = %0.3f ms\n',te90);
-fprintf('\tDwell time = %0.2f us\n',dwell_time);
+fprintf('\tRamp time = %0.0f us\n',ramp_time);
+fprintf('\tSample time = %0.2f us\n',sample_time);
+fprintf('\tMatrix size (z) = %0.0f\n', matrix_size_z);
+fprintf('\tFOV (x) = %0.0f mm\n', fov(1));
+fprintf('\tFOV (y) = %0.0f mm\n', fov(2));
+fprintf('\tFOV (z) = %0.0f mm\n', fov(3));
 fprintf('\tNum FIDs = %0.0f\n',nfids);
 fprintf('\tNum pts in FID (npts) = %0.0f\n',npts);
-fprintf('\tGas flip angle = %0.1f°\n', gas_flip);
-fprintf('\tDissolved flip angle = %0.1f°\n', dis_flip);
+fprintf('\tNum bonus spectra = %0.0f\n',sum(bonus_spectra_labels==1));
+
+% scan-specific variables
+if contains(file, 'proton')
+    fprintf('\tTR (proton) = %0.2f ms\n',tr_proton);
+    fprintf('\tFlip angle (proton) = %0.0f deg\n',flip_angle_proton);
+else
+    fprintf('\tCenter frequency = %0.0f Hz\n',freq_center);
+    fprintf('\tOffset frequency = %0.0f Hz\n',freq_dis_excitation_hz);
+    fprintf('\tRF excitation = %0.1f ppm\n',rf_excitation);
+    fprintf('\tTR (gas) = %0.3f ms\n',tr_gas);
+    fprintf('\tTR (dissolved) = %0.3f ms\n',tr_dissolved);
+    fprintf('\tFlip angle (gas) = %0.2f deg\n',flip_angle_gas);
+    fprintf('\tFlip angle (dissolved) = %0.0f deg\n',flip_angle_dissolved);
+end
+
 
 %% Plot a select number of first FIDs sequentially
-
-% initialize figure
-h=figure;
 
 % check if number of requested fids exceeds number of total fids
 if first_frames>nfids
@@ -200,10 +140,8 @@ if first_frames>nfids
 end 
 
 % plot first FIDs
+figure();
 plot(abs(fids(1:first_frames*npts)));
-if ymax ~= 1
-    ylim([0 ymax])
-end 
 
 % set title and axis labels
 a=sprintf('%s First %0.0f fids',strrep(file, '_', '\_'),first_frames);
@@ -219,10 +157,8 @@ fprintf('RMS signal of first frames = %3.3e\n',rms(abs(fids(1:first_frames*npts)
 
 %% Plot all FIDs sequentially
 
-% initialize figure
-h=figure;
-
 % plot all FIDs sequentially
+figure();
 plot(abs(fids(1:end))); 
 
 % set title and axis labels
@@ -234,56 +170,47 @@ box on
 
 %% Plot all FIDs overlapping (to look for noise)
 
-% initialize figure
-h=figure;
-
 % plot all FIDs overlapping
+figure();
 plot(abs(fids)); 
-if ymax ~= 1
-    ylim([0 ymax])
-end
 
 % set title and axis labels
 xlabel('points')
 ylabel('magnitude')
-a=sprintf('%s All FIDs Overlapping', strrep(file, '_', '\_'));
+a=sprintf('%s All Dixon FIDS Overlapping', strrep(file, '_', '\_'));
 title(a)
 box on
 
-%% Plot all FIDs overlapping, separating gas and dissolved
+%% Plot all gas FIDs overlapping (minus bonus spectra)
 
-% initialize gas FID figure
-h=figure;
-% plot all gas FIDs overlapping
-plot(abs(fids_gas)); 
-if ymax ~= 1
-    ylim([0 ymax])
-end
+% plot gas FIDs overlapping without bonus spectra
+figure();
+plot(abs(fids(:,contrast_labels==1 & bonus_spectra_labels==0)))
+
 % set title and axis labels
 xlabel('points')
 ylabel('magnitude')
-a=sprintf('%s All Gas FIDs Overlapping', strrep(file, '_', '\_'));
+a=sprintf('%s All Gas FIDS Overlapping (minus bonus spectra)', strrep(file, '_', '\_'));
 title(a)
 box on
 
-% initialize dissolved FID figure
-h=figure;
-% plot all dissolved FIDs overlapping
-plot(abs(fids_dis)); 
-if ymax ~= 1
-    ylim([0 ymax])
-end
+%% Plot all dissolved FIDs overlapping (minus bonus spectra)
+
+% plot gas FIDs overlapping without bonus spectra
+figure();
+plot(abs(fids(:,contrast_labels==2 & bonus_spectra_labels==0)))
+
 % set title and axis labels
 xlabel('points')
 ylabel('magnitude')
-a=sprintf('%s All Dissolved FIDs Overlapping', strrep(file, '_', '\_'));
+a=sprintf('%s All Dissolved FIDS Overlapping (minus bonus spectra)', strrep(file, '_', '\_'));
 title(a)
 box on
 
 %% Plot real and imaginary parts of signal
 
 % initialize figure
-h=figure;
+figure();
 ax1=subplot(311);
 
 % plot real part of signal

@@ -124,8 +124,8 @@ else
     fprintf('\tCenter frequency = %0.0f Hz\n',freq_center);
     fprintf('\tOffset frequency = %0.0f Hz\n',freq_dis_excitation_hz);
     fprintf('\tRF excitation = %0.1f ppm\n',rf_excitation);
-    fprintf('\tTR (gas) = %0.3f ms\n',tr_gas);
-    fprintf('\tTR (dissolved) = %0.3f ms\n',tr_dissolved);
+    fprintf('\tTR (gas) = %0.1f ms\n',tr_gas);
+    fprintf('\tTR (dissolved) = %0.1f ms\n',tr_dissolved);
     fprintf('\tFlip angle (gas) = %0.2f deg\n',flip_angle_gas);
     fprintf('\tFlip angle (dissolved) = %0.0f deg\n',flip_angle_dissolved);
 end

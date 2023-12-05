@@ -59,8 +59,8 @@ if contains(file, 'proton')
     matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
     orientation = general_user_params_string("orientation");
 elseif contains(file, 'dixon')
-    freq_center = general_user_params_long("129Xe_center_frequency"); % in Hz
-    freq_dis_excitation_hz = general_user_params_long("129Xe_dissolved_offset_frequency"); % in Hz
+    freq_center = general_user_params_long("xe_center_frequency"); % in Hz
+    freq_dis_excitation_hz = general_user_params_long("xe_dissolved_offset_frequency"); % in Hz
     tr_gas = ismrmrd_header.sequenceParameters.TR(1);
     tr_dissolved = ismrmrd_header.sequenceParameters.TR(2);
     flip_angle_gas = ismrmrd_header.sequenceParameters.flipAngle_deg(1);
@@ -68,8 +68,8 @@ elseif contains(file, 'dixon')
     matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
     orientation = general_user_params_string("orientation");
 elseif contains(file, "calibration")
-    freq_center = general_user_params_long("129Xe_center_frequency"); % in Hz
-    freq_dis_excitation_hz = general_user_params_long("129Xe_dissolved_offset_frequency"); % in Hz
+    freq_center = general_user_params_long("xe_center_frequency"); % in Hz
+    freq_dis_excitation_hz = general_user_params_long("xe_dissolved_offset_frequency"); % in Hz
     tr_gas = ismrmrd_header.sequenceParameters.TR(1);
     tr_dissolved = ismrmrd_header.sequenceParameters.TR(2);
     flip_angle_gas = ismrmrd_header.sequenceParameters.flipAngle_deg(1);

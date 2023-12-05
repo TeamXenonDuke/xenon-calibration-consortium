@@ -19,10 +19,18 @@ for i = 1:numel(data_struct)
 end
 
 if contains(file, "dixon") || contains(file, "calibration")
-    general_user_params = containers.Map();
+    general_user_params_long = containers.Map();
     data_struct = ismrmrd_header.userParameters.userParameterLong;
     for i = 1:numel(data_struct)
-        general_user_params(data_struct(i).name) = data_struct(i).value;
+        general_user_params_long(data_struct(i).name) = data_struct(i).value;
+    end
+end
+
+if contains(file, "proton") || contains(file, "dixon")
+    general_user_params_string = containers.Map();
+    data_struct = ismrmrd_header.userParameters.userParameterString;
+    for i = 1:numel(data_struct)
+        general_user_params_string(data_struct(i).name) = data_struct(i).value;
     end
 end
 
@@ -49,22 +57,23 @@ if contains(file, 'proton')
     tr_proton = ismrmrd_header.sequenceParameters.TR(1); % in ms
     flip_angle_proton = ismrmrd_header.sequenceParameters.flipAngle_deg(1); % in degrees
     matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
+    orientation = general_user_params_string("orientation");
 elseif contains(file, 'dixon')
-    freq_center = general_user_params("129Xe_center_frequency"); % in Hz
-    freq_dis_excitation_hz = general_user_params("129Xe_dissolved_offset_frequency"); % in Hz
+    freq_center = general_user_params_long("129Xe_center_frequency"); % in Hz
+    freq_dis_excitation_hz = general_user_params_long("129Xe_dissolved_offset_frequency"); % in Hz
     tr_gas = ismrmrd_header.sequenceParameters.TR(1);
     tr_dissolved = ismrmrd_header.sequenceParameters.TR(2);
     flip_angle_gas = ismrmrd_header.sequenceParameters.flipAngle_deg(1);
     flip_angle_dissolved = ismrmrd_header.sequenceParameters.flipAngle_deg(2);
     matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
+    orientation = general_user_params_string("orientation");
 elseif contains(file, "calibration")
-    freq_center = general_user_params("129Xe_center_frequency"); % in Hz
-    freq_dis_excitation_hz = general_user_params("129Xe_dissolved_offset_frequency"); % in Hz
+    freq_center = general_user_params_long("129Xe_center_frequency"); % in Hz
+    freq_dis_excitation_hz = general_user_params_long("129Xe_dissolved_offset_frequency"); % in Hz
     tr_gas = ismrmrd_header.sequenceParameters.TR(1);
     tr_dissolved = ismrmrd_header.sequenceParameters.TR(2);
     flip_angle_gas = ismrmrd_header.sequenceParameters.flipAngle_deg(1);
     flip_angle_dissolved = ismrmrd_header.sequenceParameters.flipAngle_deg(2);
-    matrix_size_z = nan;
 end
 
 % calculate RF excitation in ppm
@@ -108,7 +117,6 @@ fprintf('\tField strength = %0.2f T\n',field_strength);
 fprintf('\tTE90 = %0.3f ms\n',te90);
 fprintf('\tRamp time = %0.0f us\n',ramp_time);
 fprintf('\tSample time = %0.2f us\n',sample_time);
-fprintf('\tMatrix size (z) = %0.0f\n', matrix_size_z);
 fprintf('\tFOV (x) = %0.0f mm\n', fov(1));
 fprintf('\tFOV (y) = %0.0f mm\n', fov(2));
 fprintf('\tFOV (z) = %0.0f mm\n', fov(3));
@@ -120,7 +128,19 @@ fprintf('\tNum bonus spectra = %0.0f\n',sum(bonus_spectra_labels==1));
 if contains(file, 'proton')
     fprintf('\tTR (proton) = %0.2f ms\n',tr_proton);
     fprintf('\tFlip angle (proton) = %0.0f deg\n',flip_angle_proton);
-else
+    fprintf('\tMatrix size (z) = %0.0f\n', matrix_size_z);
+    fprintf('\tOrientation = %s\n',orientation);
+elseif contains(file, 'dixon')
+    fprintf('\tCenter frequency = %0.0f Hz\n',freq_center);
+    fprintf('\tOffset frequency = %0.0f Hz\n',freq_dis_excitation_hz);
+    fprintf('\tRF excitation = %0.1f ppm\n',rf_excitation);
+    fprintf('\tTR (gas) = %0.1f ms\n',tr_gas);
+    fprintf('\tTR (dissolved) = %0.1f ms\n',tr_dissolved);
+    fprintf('\tFlip angle (gas) = %0.2f deg\n',flip_angle_gas);
+    fprintf('\tFlip angle (dissolved) = %0.0f deg\n',flip_angle_dissolved);
+    fprintf('\tMatrix size (z) = %0.0f\n', matrix_size_z);
+    fprintf('\tOrientation = %s\n',orientation);
+elseif contains(file, "calibration")
     fprintf('\tCenter frequency = %0.0f Hz\n',freq_center);
     fprintf('\tOffset frequency = %0.0f Hz\n',freq_dis_excitation_hz);
     fprintf('\tRF excitation = %0.1f ppm\n',rf_excitation);
@@ -129,7 +149,6 @@ else
     fprintf('\tFlip angle (gas) = %0.2f deg\n',flip_angle_gas);
     fprintf('\tFlip angle (dissolved) = %0.0f deg\n',flip_angle_dissolved);
 end
-
 
 %% Plot a select number of first FIDs sequentially
 

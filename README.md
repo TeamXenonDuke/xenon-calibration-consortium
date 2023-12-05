@@ -5,6 +5,7 @@ In order to read MRD files you will need to download/clone the ismrmrd repositor
 
 ## Description
 - calibration_production_v2302.m: script to extract 129Xe calibration parameters and visualize calibration scan data in real time.
+- bonusSpectraCalibration_v2302.m: script for analyzing bonus calibration spectra
 - MRD_data_inspector.m: script for inspecting data and header variables from MRD file
 - NOTE: Remaining files are required functions and classes for calibration_production_v2302.m
 

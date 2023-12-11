@@ -12,11 +12,6 @@ ismrmrd_header = ismrmrd.xml.deserialize(dataset.readxml);
 %% Extract key header variables
 
 % convert user parameter fields to maps for easy query
-traj_description_user_params = containers.Map();
-data_struct = ismrmrd_header.encoding.trajectoryDescription.userParameterLong;
-for i = 1:numel(data_struct)
-    traj_description_user_params(data_struct(i).name) = data_struct(i).value;
-end
 
 if contains(file, "dixon") || contains(file, "calibration")
     general_user_params_long = containers.Map();
@@ -31,6 +26,12 @@ if contains(file, "proton") || contains(file, "dixon")
     data_struct = ismrmrd_header.userParameters.userParameterString;
     for i = 1:numel(data_struct)
         general_user_params_string(data_struct(i).name) = data_struct(i).value;
+    end
+
+    traj_description_user_params = containers.Map();
+    data_struct = ismrmrd_header.encoding.trajectoryDescription.userParameterLong;
+    for i = 1:numel(data_struct)
+        traj_description_user_params(data_struct(i).name) = data_struct(i).value;
     end
 end
 
@@ -47,7 +48,6 @@ institution = ismrmrd_header.acquisitionSystemInformation.institutionName;
 field_strength = ismrmrd_header.acquisitionSystemInformation.systemFieldStrength_T; % in T
 te90 = ismrmrd_header.sequenceParameters.TE; % in us
 sample_time = dataset.readAcquisition().head.sample_time_us(1); % in us
-ramp_time = traj_description_user_params("ramp_time"); % in us
 fov = [ismrmrd_header.encoding.reconSpace.fieldOfView_mm.x, ...
     ismrmrd_header.encoding.reconSpace.fieldOfView_mm.y, ...
     ismrmrd_header.encoding.reconSpace.fieldOfView_mm.z]; % in mm
@@ -58,6 +58,7 @@ if contains(file, 'proton')
     flip_angle_proton = ismrmrd_header.sequenceParameters.flipAngle_deg(1); % in degrees
     matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
     orientation = general_user_params_string("orientation");
+    ramp_time = traj_description_user_params("ramp_time"); % in us
 elseif contains(file, 'dixon')
     freq_center = general_user_params_long("xe_center_frequency"); % in Hz
     freq_dis_excitation_hz = general_user_params_long("xe_dissolved_offset_frequency"); % in Hz
@@ -67,6 +68,7 @@ elseif contains(file, 'dixon')
     flip_angle_dissolved = ismrmrd_header.sequenceParameters.flipAngle_deg(2);
     matrix_size_z = ismrmrd_header.encoding.reconSpace.matrixSize.z;
     orientation = general_user_params_string("orientation");
+    ramp_time = traj_description_user_params("ramp_time"); % in us
 elseif contains(file, "calibration")
     freq_center = general_user_params_long("xe_center_frequency"); % in Hz
     freq_dis_excitation_hz = general_user_params_long("xe_dissolved_offset_frequency"); % in Hz
@@ -117,7 +119,6 @@ fprintf('\tSystem vendor = %s\n',vendor);
 fprintf('\tInstitution = %s\n',institution);
 fprintf('\tField strength = %0.2f T\n',field_strength);
 fprintf('\tTE90 = %0.3f ms\n',te90);
-fprintf('\tRamp time = %0.0f us\n',ramp_time);
 fprintf('\tSample time = %0.2f us\n',sample_time);
 fprintf('\tFOV (x) = %0.0f mm\n', fov(1));
 fprintf('\tFOV (y) = %0.0f mm\n', fov(2));
@@ -132,6 +133,7 @@ if contains(file, 'proton')
     fprintf('\tFlip angle (proton) = %0.0f deg\n',flip_angle_proton);
     fprintf('\tMatrix size (z) = %0.0f\n', matrix_size_z);
     fprintf('\tOrientation = %s\n',orientation);
+    fprintf('\tRamp time = %0.0f us\n',ramp_time);
 elseif contains(file, 'dixon')
     fprintf('\tCenter frequency = %0.0f Hz\n',freq_center);
     fprintf('\tOffset frequency = %0.0f Hz\n',freq_dis_excitation_hz);
@@ -142,6 +144,7 @@ elseif contains(file, 'dixon')
     fprintf('\tFlip angle (dissolved) = %0.0f deg\n',flip_angle_dissolved);
     fprintf('\tMatrix size (z) = %0.0f\n', matrix_size_z);
     fprintf('\tOrientation = %s\n',orientation);
+    fprintf('\tRamp time = %0.0f us\n',ramp_time);
 elseif contains(file, "calibration")
     fprintf('\tCenter frequency = %0.0f Hz\n',freq_center);
     fprintf('\tOffset frequency = %0.0f Hz\n',freq_dis_excitation_hz);

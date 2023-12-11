@@ -90,15 +90,17 @@ npts = size(fids, 1);
 nfids = size(fids, 2);
 
 % if data from GE scanner, take complex conjugate
-if strcmp(vendor,'ge')
+if strcmpi(vendor,'ge')
     fids = conj(fids);
 end
 
 % read trajectory data
-traj_cell = dataset.readAcquisition().traj;
-traj = zeros(nfids, npts, 3);
-for i=1:nfids
-    traj(i,:,:) = transpose(double(traj_cell{i}));
+if contains(file, "proton") || contains(file, "dixon")
+    traj_cell = dataset.readAcquisition().traj;
+    traj = zeros(nfids, npts, 3);
+    for i=1:nfids
+        traj(i,:,:) = transpose(double(traj_cell{i}));
+    end
 end
 
 % get contrast and bonus spectra labels

@@ -87,13 +87,12 @@ end
 %% Extract FID acquisition data and trajectories
 
 % read k-space data
-% fids = cell2mat(dataset.readAcquisition().data);
 npts = size(dataset.readAcquisition(1).data{1},1);
 nfids = dataset.getNumberOfAcquisitions;
 fids_cell = dataset.readAcquisition().data;
-fids = zeros(nfids, npts);
+fids = zeros(npts, nfids);
 for i=1:nfids
-    fids(i,:) = transpose(double(fids_cell{i}));
+    fids(:,i) = transpose(double(fids_cell{i}(:,1)));
 end
 
 % if data from GE scanner, take complex conjugate

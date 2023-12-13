@@ -9,7 +9,7 @@ function [cali_struct] = readRawCali(raw_path)
 % cali_struct.weight = patient weight in pounds %
 % cali_struct.te = TE in u-seconds;
 % cali_struct.tr = TR in u-seconds;
-% cali_struct.dwell_time = dwell time in nanoseconds;
+% cali_struct.dwell_time = dwell time in seconds;
 % cali_struct.freq = gas excitation frequency in Hz;
 % cali_struct.xeFreqMHz = gas excitation frequency in MHz;
 % cali_struct.data = the FID data;
@@ -99,116 +99,54 @@ switch file_extension
 
     case '.h5'
         % mrd file
-        % Reading the k-space data
-        dataset_data = h5read(raw_path, '/dataset/data');
-        all_kspace_data = dataset_data.data;
 
-        %Reshaping the k-space
-        npts = size(all_kspace_data{1}, 1) / 2; % 512 for duke
-        nfids = size(all_kspace_data, 1); % 520 for duke
+        % read in mrd file dataset and ismrmrdHeader
+        dataset = ismrmrd.Dataset(raw_path, 'dataset');
+        ismrmrd_header = ismrmrd.xml.deserialize(dataset.readxml);
 
-        fids = [];
-        for ii = 1:nfids
-            fid = all_kspace_data{ii};
-            i = 1;
-            for j = 1:npts
-                fids(j, ii) = double(complex(fid(i), fid(i+1)));
-                i = i + 2;
-            end
-        end
-        % Reading dwell_time from a k-space fid
-        cali_data_head = dataset_data.head;
-        dwell_time_all = cali_data_head.sample_time_us;
-        dwell_time = double(dwell_time_all(1)) * 10^-6;
-
-        % Dataset header variables are in the xml field - gives string
-        dataset_header = h5read(raw_path, '/dataset/xml');
-
-        xml_struct = xml2struct(dataset_header); % the xml2struct converts the string
-        tr_mrd = str2double(xml_struct.ismrmrdHeader.sequenceParameters.TR.Text);
-
-        % Threshold to not scale by 1E-3 some tr_mrd are in seconds
-        if tr_mrd < 1E-1
-            tr = tr_mrd; % this is 0.015 for duke
-        else
-            tr = tr_mrd * 1E-3;
+        % convert user parameter fields to maps for easy query
+        general_user_params_long = containers.Map();
+        data_struct = ismrmrd_header.userParameters.userParameterLong;
+        for i = 1:numel(data_struct)
+            general_user_params_long(data_struct(i).name) = data_struct(i).value;
         end
 
-        vendor = xml_struct.ismrmrdHeader.acquisitionSystemInformation.systemVendor.Text;
-        vendor = lower(vendor);
-        switch vendor
-            case 'ge'
+        % read in variables
+        cali_struct.scan_date = ismrmrd_header.studyInformation.studyDate; % in YYYY-MM-DD
+        vendor = ismrmrd_header.acquisitionSystemInformation.systemVendor;
+        cali_struct.te = ismrmrd_header.sequenceParameters.TE * 1e3; % in us
+        cali_struct.tr = ismrmrd_header.sequenceParameters.TR(2) * 1e3; % dissolved TR in us
+        cali_struct.dwell_time = double(dataset.readAcquisition().head.sample_time_us(1)) * 1e-6; % in s
+        cali_struct.freq = general_user_params_long("xe_center_frequency"); % in Hz
+        cali_struct.xeFreqMHz = cali_struct.freq * 1e-6; % gas excitation frequency in MHz
+        field_strength = ismrmrd_header.acquisitionSystemInformation.systemFieldStrength_T; % in T
+        freq_dis_excitation_hz = general_user_params_long("xe_dissolved_offset_frequency"); % in Hz
 
-            % conjugating the data solved the issues but we don't exactly know
-            % the reason
+        % calculate rf excitation in ppm
+        gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla
+        cali_struct.rf_excitation_ppm = round(freq_dis_excitation_hz/(gyro_ratio * field_strength));
 
-            fids = conj(fids);
-            % remove the first two points due to initial recovery time
-            % and zero pad the end
-            fids = fids(3:end, :);
-            fids(size(fids, 1):size(fids, 1)+2, :) = 0;
-
-            fids = fids / max(abs(fids(:)), [], 'all'); % max Normalizing
-            xeFreqMHz_mrd = str2double(xml_struct.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 2}.value.Text);
-            xeFreqMHz = xeFreqMHz_mrd * 1E-6; % 34.0923 MHz for duke
-            % see if the excitation is in the mrd file
-            try
-                excitation = str2double(xml_struct.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
-                % RF excitation will be in ppm, either 218ppm or 208 ppm
-                rf_excitation = round(abs(excitation-xeFreqMHz*1E6)/(xeFreqMHz), 1);
-            catch
-                rf_excitation = 218;
-            end
-            % Philips - Cincinnati Children's Hospital Medical Center Data
-            case 'philips'
-            xeFreqMHz = str2double(xml_struct.ismrmrdHeader.userParameters.userParameterLong.value.Text) * 1E-6;
-            rf_excitation = str2double(xml_struct.ismrmrdHeader.userParameters.userParameterDouble.value.Text);
-
-            case 'siemens'
-            xeFreqMHz_mrd = str2double(xml_struct.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 2}.value.Text);
-            xeFreqMHz = xeFreqMHz_mrd * 1E-6;
-            dwell_time = str2double(xml_struct.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1}.value.Text);
-            % see if the excitation is in the mrd file
-            try
-                excitation = str2double(xml_struct.ismrmrdHeader.encoding.trajectoryDescription.userParameterDouble{1, 3}.value.Text);
-                % RF excitation will be in ppm, either 218ppm or 208 ppm
-                rf_excitation = round(abs(excitation-xeFreqMHz*1E6)/(xeFreqMHz), 1);
-            catch
-                rf_excitation = 218;
-            end
-            otherwise
-            error('Unknown MR vendor')
-        end
-        
-        
-        if isfield(xml_struct.ismrmrdHeader, 'subjectInformation')
-           if isfield(xml_struct.ismrmrdHeader.subjectInformation, 'patientWeightu_kg')
-              cali_struct.weight = str2double(xml_struct.ismrmrdHeader.subjectInformation.patientWeightu_kg.Text);
-           else
-              cali_struct.weight = nan;
-           end   
-           if isfield(xml_struct.ismrmrdHeader.subjectInformation, 'patientID')
-              cali_struct.seq_name = xml_struct.ismrmrdHeader.subjectInformation.patientID.Text;
-           else
-              cali_struct.seq_name = nan;
-           end   
-        else
-           cali_struct.weight = nan;
-           cali_struct.seq_name = nan;
-        end   
-        if strcmpi(vendor,'philips')
-           cali_struct.te = str2double(xml_struct.ismrmrdHeader.sequenceParameters.TE.Text)*1e3;
-        else
-           cali_struct.te = str2double(xml_struct.ismrmrdHeader.sequenceParameters.TE.Text)*1e6;
-        end
-        cali_struct.tr = tr * 1e6;
-        cali_struct.dwell_time = dwell_time;
-        cali_struct.freq = xeFreqMHz * 1e6;
-        cali_struct.xeFreqMHz = xeFreqMHz;
-        cali_struct.data = fids;
-        cali_struct.scan_date = nan;
+        % assign nan to variables not in mrd file
+        cali_struct.seq_name = nan;
+        cali_struct.weight = nan;
         cali_struct.vref = nan;
-        cali_struct.rf_excitation_ppm = rf_excitation;
+
+        % read k-space data
+        npts = size(dataset.readAcquisition(1).data{1},1);
+        nfids = dataset.getNumberOfAcquisitions;
+        fids_cell = dataset.readAcquisition().data;
+        fids = zeros(npts, nfids);
+        for i=1:nfids
+            fids(:,i) = transpose(double(fids_cell{i}(:,1)));
+        end
+        
+        % if data from GE scanner, take complex conjugate
+        if strcmpi(vendor,'ge')
+            fids = conj(fids);
+        end
+        
+        % add fid data to struct
+        cali_struct.data = fids;
 
     otherwise
         error('Unknown Raw File Type');

@@ -47,7 +47,7 @@ vendor = ismrmrd_header.acquisitionSystemInformation.systemVendor;
 institution = ismrmrd_header.acquisitionSystemInformation.institutionName;
 field_strength = ismrmrd_header.acquisitionSystemInformation.systemFieldStrength_T; % in T
 te90 = ismrmrd_header.sequenceParameters.TE; % in us
-sample_time = drataset.readAcquisition().head.sample_time_us(1); % in us
+sample_time = dataset.readAcquisition().head.sample_time_us(1); % in us
 fov = [ismrmrd_header.encoding.reconSpace.fieldOfView_mm.x, ...
     ismrmrd_header.encoding.reconSpace.fieldOfView_mm.y, ...
     ismrmrd_header.encoding.reconSpace.fieldOfView_mm.z]; % in mm

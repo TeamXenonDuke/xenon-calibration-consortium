@@ -40,7 +40,7 @@ file_loc = file_loc{end-1};
 %% Check if Dixon and determine if bonus spectra exist
 
 %if adFree{6} is integer and adFree{11} contains info, assume bonus spectra
-if and(contains(filename,'Dixon'),~contains(filename,'BHUTE')) 
+if contains(filename, 'Dixon', 'IgnoreCase', true) && ~contains(filename, 'BHUTE') && ~contains(filename, 'proton', 'IgnoreCase', true)
     if isfield(twix_obj.hdr.MeasYaps,'sWiPMemBlock')
        twix_obj.hdr.MeasYaps.sWipMemBlock = twix_obj.hdr.MeasYaps.sWiPMemBlock; %replace the old name
        twix_obj.hdr.MeasYaps = rmfield(twix_obj.hdr.MeasYaps,'sWiPMemBlock');

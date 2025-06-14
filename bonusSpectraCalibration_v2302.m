@@ -1,7 +1,7 @@
 %{
 adapted by Aryil Bechtel (2021) from demo_calibration_duke_UVA_B1.m
 updated by Yi Zheng (2023)
-
+updated by Sup (2025) for KUMC Multi-Echo compatibility
 script to run calibration analysis on bonus calibration FIDs.
 currently intended for use with 30 bonus calibration FIDs.
 
@@ -37,6 +37,25 @@ filename = strrep(filename, '_', '-'); % replace underscores to avoid subscript 
 file_loc = regexp(path,filesep,'split');
 file_loc = file_loc{end-1};
 
+%% Check the version of the Dixon file
+try
+    number_of_alTR = length(twix_obj.hdr.Phoenix.alTR);
+catch
+    number_of_alTR = 0;
+end
+
+if number_of_alTR == 0
+    error('Cannot automatically select GX protocol. Require manual selection');
+elseif number_of_alTR == 7
+    protocol = 'multi_echo_2';
+elseif number_of_alTR == 5
+    protocol = 'multi_echo';
+elseif number_of_alTR == 1
+    protocol = 'single_echo';
+else
+    error('Unrecognized length of alTR: %d. Cannot automatically select GX protocol. Require manual selection', number_of_alTR);
+end
+
 %% Check if Dixon and determine if bonus spectra exist
 
 %if adFree{6} is integer and adFree{11} contains info, assume bonus spectra
@@ -44,9 +63,15 @@ if contains(filename, 'Dixon', 'IgnoreCase', true) && ~contains(filename, 'BHUTE
     if isfield(twix_obj.hdr.MeasYaps,'sWiPMemBlock')
        twix_obj.hdr.MeasYaps.sWipMemBlock = twix_obj.hdr.MeasYaps.sWiPMemBlock; %replace the old name
        twix_obj.hdr.MeasYaps = rmfield(twix_obj.hdr.MeasYaps,'sWiPMemBlock');
-    end    
-    numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{6};
-    numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{11}; 
+    end
+
+    if strcmp(protocol, "single_echo") || strcmp(protocol, "multi_echo")
+        numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{6};
+        numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{11};
+    else
+        numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{4}; %Change location in KUMC data
+        numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{10}; %Change location in KUMC data
+    end
 
     if and(mod(numDisSpect,1)==0,~isempty(numGasSpect))
         containsBonus = 1;
@@ -59,7 +84,7 @@ else
 end
 
 %% Extract bonus FIDs and key variables
-[bonusCali] = readBonusSpectra(twix_obj); %get full res bonus FIDs
+[bonusCali] = readBonusSpectra(twix_obj,protocol); %get full res bonus FIDs
 Seq_name = twix_obj.hdr.Config.SequenceDescription;
 weight = twix_obj.hdr.Dicom.flUsedPatientWeight;
 freq = twix_obj.hdr.Dicom.lFrequency; 
@@ -74,11 +99,19 @@ bonusCali = double(bonusCali);
 nPts = size(bonusCali,1); % # pts in each bonus FID
 nFids = numSpect;
 nCal = numGasSpect;
+if strcmp(protocol, "single_echo") || strcmp(protocol, "multi_echo")
+    bonusDwell = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{10}*0.5*1e-6; %dwell time in seconds, divide 2 bc oversampling
+    calRefVolt = twix_obj.hdr.MeasYaps.sWipMemBlock.alFree{3};
+    disTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{7} * 1e-3; %dissolved TR in seconds
+    gasTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{12} * 1e-3; %gas TR in seconds 
+else
+    %Change location in KUMC data
+    bonusDwell = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{15}*0.5*1e-6; %dwell time in seconds, divide 2 bc oversampling
+    calRefVolt = twix_obj.hdr.MeasYaps.sWipMemBlock.alFree{2};
+    disTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{5} * 1e-3; %dissolved TR in seconds
+    gasTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{11} * 1e-3; %gas TR in seconds 
+end
 
-bonusDwell = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{10}*0.5*1e-6; %dwell time in seconds, divide 2 bc oversampling
-calRefVolt = twix_obj.hdr.MeasYaps.sWipMemBlock.alFree{3};
-disTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{7} * 1e-3; %dissolved TR in seconds
-gasTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{12} * 1e-3; %gas TR in seconds 
 
 % get scan date
 scanDate = twix_obj.hdr.Phoenix.tReferenceImage0; 

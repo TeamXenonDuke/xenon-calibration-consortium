@@ -1,4 +1,4 @@
-function [raw] = readBonusSpectra(twix_obj)
+function [raw] = readBonusSpectra(twix_obj,protocol)
 
 %{
 modification of read_twix_bonus_spect_ZW.m (Ziyi 17.08.14)
@@ -13,13 +13,28 @@ output: (FIDlength x numSpect matrix) of FIDs
 %}
 
 if isfield(twix_obj.hdr.MeasYaps,'sWipMemBlock')
+    if strcmp(protocol, "single_echo") || strcmp(protocol, "multi_echo")
     spectReso = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{9}; % read in spect sample points
     numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{6}; % find # of bonus dis spectra
     numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{11}; % find # of bonus gas spectra 
+    else
+    %Change location in KUMC data
+    spectReso = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{8}; % read in spect sample points
+    numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{4}; % find # of bonus dis spectra
+    numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{10}; % find # of bonus gas spectra 
+    end
+
 elseif isfield(twix_obj.hdr.MeasYaps,'sWiPMemBlock')
-    spectReso = twix_obj.hdr.MeasYaps.sWiPMemBlock.adFree{9};
+    if strcmp(protocol, "single_echo") || strcmp(protocol, "multi_echo")
+    spectReso = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{9}; % read in spect sample points
     numDisSpect = twix_obj.hdr.MeasYaps.sWiPMemBlock.adFree{6};
-    numGasSpect = twix_obj.hdr.MeasYaps.sWiPMemBlock.adFree{11}; 
+    numGasSpect = twix_obj.hdr.MeasYaps.sWiPMemBlock.adFree{11};
+    else
+    %Change location in KUMC data
+    spectReso = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{8}; % read in spect sample points in KUMC
+    numDisSpect = twix_obj.hdr.MeasYaps.sWiPMemBlock.adFree{4};
+    numGasSpect = twix_obj.hdr.MeasYaps.sWiPMemBlock.adFree{10};
+    end
 end
 numSpect = numDisSpect + numGasSpect;
 obj = twix_obj.image;

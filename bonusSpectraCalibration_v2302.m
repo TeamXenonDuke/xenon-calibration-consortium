@@ -179,7 +179,7 @@ freq_guess = [rbc_freq_adj, mem_freq_adj, gas_freq_adj] * xeFreqMHz; % in Hz
 
 %set all other initial parameter guesses
 area_guess =  [1, 1, 1]; % no benefit seen in tayloring these guesses
-fwhmL_guess = [8.8, 5.0, 2] * xeFreqMHz;
+fwhmL_guess = [8.8, 5.0, 1.2] * xeFreqMHz;
 fwhmG_guess = [0, 6.1, 0] * xeFreqMHz;
 phase_guess = [0, 0, 0]; % no benefit seen in tayloring these guesses
 

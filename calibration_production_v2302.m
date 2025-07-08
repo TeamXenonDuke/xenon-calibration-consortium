@@ -1,4 +1,7 @@
 % Script to plot and fit calibration FIDs
+% As of 3/27/25: 
+%   choose cycles or seconds averaging;
+%   compare dedicated vs. incidental gas reference for chemical shift calc
 
 % Required functions:
 %{
@@ -25,7 +28,10 @@ save_csv =1; % export derived variables as csv file
 
 % user control of skipping and averaging
 seconds2skip = 2; %number of seconds to skip in breath hold
-seconds2avg = 1;
+method = 1; % 1 = seconds averaging; 2 = cycles averaging; 3 = input averages
+seconds2avg = 1;% this is used if method = 1
+cycles2avg = 1; % this is used if method = 2
+nAvg = 100; % this is used if method = 3
 nDis = 500; % Assume consortium standard
 FlipTarget = 20; % target flip angle from calibration
 
@@ -55,6 +61,22 @@ filename = strrep(filename, '_', '-'); % replace underscores to avoid subscript 
 file_loc = regexp(path, filesep, 'split');
 file_loc = file_loc{end-1};
 
+%% Determine averaging method (put here by Seth)
+if method == 2
+    % below is method of finding heart rate (from calculateOscillationAmps.m)
+    dyn = fitDynamicSpec(file_with_path, 'dynV');
+    BHs = [2,7]; % breath hold start and end
+    [BHstart,BHend] = findBHs(dyn.t(:,1),BHs);
+    xData = dyn.t(BHstart:BHend)';
+    [rbcFit,~] = fit(dyn.t(BHstart:BHend,1),dyn.area(BHstart:BHend,1),'exp1');
+    b = highpassfilter(length(dyn.area(:,1)));
+    rbcNorm = rbcFit(dyn.t(:,1));
+    area_detrend = filtfilt(b,1,(dyn.area(:,1)-rbcNorm)./rbcNorm);
+    area_detrend = area_detrend(BHstart:BHend,1);
+    [area_fit,~] = fit(xData,area_detrend,fittype('sin1'),fitoptions('Method','NonlinearLeastSquares'));
+    hr = area_fit.b1/(2*pi)*60;
+end
+
 %% Prepare variables
 % extract favorite variables from the data struct
 weight = cali_struct.weight;
@@ -70,6 +92,9 @@ nPts = size(theFID, 1);
 VRef = cali_struct.vref;
 scanDateStr = cali_struct.scan_date;
 rf_excitation_ppm = cali_struct.rf_excitation_ppm;
+if isempty(rf_excitation_ppm)
+    rf_excitation_ppm = 218;
+end
 
 % print out key variable values
 fprintf('\n\n');
@@ -95,7 +120,11 @@ gasData = theFID(:, end-nCal+1); % the first gas frame for frequency calculation
 tr_s = tr(1) * 1e-6; %tr in seconds
 t_tr = tr_s * (1:nFids);
 nSkip = round(seconds2skip/tr_s);
-nAvg = round(seconds2avg/tr_s);
+if method == 2
+    nAvg = round(60/hr/tr_s*cycles2avg);
+elseif method == 1
+    nAvg = round(seconds2avg/tr_s);
+end
 t = dwell_time * (0:(nPts - 1))';
 disData = theFID(:, nSkip:nSkip+nAvg); % just the dissolved data of interest
 disData_avg = mean(disData,2); % average the dissolved data
@@ -237,6 +266,30 @@ fprintf('SNR for Gas peak = %3.1f \n', SNRsnf_d(3));
 % Calculate and report SNR of analyzed gas FID using the Dai method
 SNR_gas_frame = gasfitObj.area'./noise_mean; % use noise calculated from dissolved
 fprintf('SNR for dedicated gas peak = %3.1f\n',SNR_gas_frame); 
+
+%% Quantify chemical shift using dedicated vs. incidental gas methods
+% Define variables for calculations
+freqs = disfitObj.freq; % [rbc membrane gas]
+rbcFreq = freqs(1); % RBC frequency in Hz
+memFreq = freqs(2); % Hz
+gasFreq = freqs(3); % Hz    
+gasOffsetFreq = gasfitObj.freq; % gas freq using dedicated gas peak rf
+    
+% Calculate chemical shifts using traditional calculation method
+rbcShiftIncidental = (rbcFreq - gasFreq) / (freq * 1e-6); % rbc shift in ppm
+memShiftIncidental = (memFreq - gasFreq) / (freq * 1e-6); % membrane shift in ppm
+    
+% Calculate chemical shifts using alternate method (dedicated gas peak ref)
+rbcShiftDedicated = (rbcFreq - (gasOffsetFreq - rf_excitation_ppm * ... 
+    freq * 1e-6)) / (freq * 1e-6); % rbc shift in ppm
+memShiftDedicated = (memFreq - (gasOffsetFreq - rf_excitation_ppm * ... 
+    freq * 1e-6)) / (freq * 1e-6); % membrane shift in ppm
+
+% Report values
+fprintf('\nRBC shift (incidental): %3.2f\n',rbcShiftIncidental)
+fprintf('RBC shift (dedicated): %3.2f\n',rbcShiftDedicated)
+fprintf('Membrane shift (incidental): %3.2f\n',memShiftIncidental)
+fprintf('Membrane shift (dedicated): %3.2f\n',memShiftDedicated)
 
 %% Quantify RBC:Membrane ratio
 RbcMemRatio = disfitObj.area(1) / disfitObj.area(2);

@@ -14,6 +14,8 @@ gas FID spectral fit:
 
 clc; clear all; close all;
 
+hr = input('Input subject heart rate: ');
+
 %% Value setttings for spectral fit and display toggles, tolerances for warnings, target flip
 Voigt = 1;% 0 = Membrane Lorentzian, 1 = Membrane Voigt fitting
           % Requires NMR_fit_v, NMR_mix_v, and NMR_TimeFit_v for Voigt=1

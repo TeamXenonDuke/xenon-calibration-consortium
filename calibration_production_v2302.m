@@ -32,7 +32,7 @@ method = 1; % 1 = seconds averaging; 2 = cycles averaging; 3 = input averages
 seconds2avg = 1;% this is used if method = 1
 cycles2avg = 1; % this is used if method = 2
 nAvg = 100; % this is used if method = 3
-nDis = 500; % Assume consortium standard
+nGas = 20; % Assume consortium standard
 FlipTarget = 20; % target flip angle from calibration
 
 % frequency guesses in ppm for dissolved phase fits
@@ -87,7 +87,6 @@ freq = cali_struct.freq;
 xeFreqMHz = cali_struct.xeFreqMHz;
 theFID = cali_struct.data;
 nFids = size(theFID, 2);
-nCal = nFids-nDis; % assume remaining FIDS past dissolved are cal
 nPts = size(theFID, 1);
 VRef = cali_struct.vref;
 scanDateStr = cali_struct.scan_date;
@@ -110,12 +109,12 @@ fprintf('\tReference Voltage = %0.1f V\n', VRef);
 fprintf('\tDwell Time = %0.0f ns\n', dwell_time*1e9);
 fprintf('\tnPts = %0.0f\n', nPts);
 fprintf('\tnFrames = %0.0f\n', nFids);
-fprintf('\tnDissolved Frames = %0.0f\n', nDis);
-fprintf('\tnGas Frames = %0.0f\n\n', nCal);
+fprintf('\tnDissolved Frames = %0.0f\n', nFids - nGas);
+fprintf('\tnGas Frames = %0.0f\n\n', nGas);
 
 %% parse out the various fids - dissolved, gas, and calibration
-calData = theFID(:, end-nCal+1:end); % the data left for flip angle calculations
-gasData = theFID(:, end-nCal+1); % the first gas frame for frequency calculations
+calData = theFID(:, end-nGas+1:end); % the data left for flip angle calculations
+gasData = theFID(:, end-nGas+1); % the first gas frame for frequency calculations
 
 tr_s = tr(1) * 1e-6; %tr in seconds
 t_tr = tr_s * (1:nFids);

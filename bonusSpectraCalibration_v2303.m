@@ -201,8 +201,6 @@ numSpect = numDisSpect+numGasSpect;
         bonusDwell = NaN; dixDwell = NaN;
     end
 
-    bonusDwell = bonusDwell*2;
-
      % close dataset
     try dset.close(); catch, end
 

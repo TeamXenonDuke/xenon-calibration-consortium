@@ -1,7 +1,7 @@
 %{
 adapted by Aryil Bechtel (2021) from demo_calibration_duke_UVA_B1.m
 updated by Yi Zheng (2023)
-updated by Sup (2025) for KUMC Multi-Echo compatibility
+
 script to run calibration analysis on bonus calibration FIDs.
 currently intended for use with 30 bonus calibration FIDs.
 
@@ -30,48 +30,35 @@ gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla
 %% Read in the file and create the twix object
 [file, path] = uigetfile('*.*', 'Select file');  % starts in current dir 
 file_with_path = strcat(path, file);  % join path and filename to open
-twix_obj = mapVBVD(file_with_path); 
-filename = file(15:end-4); % return filename back to something short
+[~, base, ext] = fileparts(file_with_path);
+isTwix = strcmpi(ext, '.dat');
+isMRD  = any(strcmpi(ext, {'.h5','.mrd'}));
+if isTwix
+    filename = file(15:end-4); % return filename back to something short
+else
+    filename = file(1:end-4); % return filename back to something short
+end
 cal_vars_export = [filename,'.csv']; % generate the filename for data comparison
 filename = strrep(filename, '_', '-'); % replace underscores to avoid subscript problems
 file_loc = regexp(path,filesep,'split');
 file_loc = file_loc{end-1};
 
-%% Check the version of the Dixon file
-try
-    number_of_alTR = length(twix_obj.hdr.Phoenix.alTR);
-catch
-    number_of_alTR = 0;
-end
-
-if number_of_alTR == 0
-    error('Cannot automatically select GX protocol. Require manual selection');
-elseif number_of_alTR == 7
-    protocol = 'multi_echo_2';
-elseif number_of_alTR == 5
-    protocol = 'multi_echo';
-elseif number_of_alTR == 1
-    protocol = 'single_echo';
-else
-    error('Unrecognized length of alTR: %d. Cannot automatically select GX protocol. Require manual selection', number_of_alTR);
-end
 
 %% Check if Dixon and determine if bonus spectra exist
+if contains(filename,'Dixon','IgnoreCase',true) && ...
+   ~contains(filename,'BHUTE') && ...
+   ~contains(filename,'proton','IgnoreCase',true)
+if isTwix
+
+    twix_obj = mapVBVD(file_with_path); 
 
 %if adFree{6} is integer and adFree{11} contains info, assume bonus spectra
-if contains(filename, 'Dixon', 'IgnoreCase', true) && ~contains(filename, 'BHUTE') && ~contains(filename, 'proton', 'IgnoreCase', true)
     if isfield(twix_obj.hdr.MeasYaps,'sWiPMemBlock')
        twix_obj.hdr.MeasYaps.sWipMemBlock = twix_obj.hdr.MeasYaps.sWiPMemBlock; %replace the old name
        twix_obj.hdr.MeasYaps = rmfield(twix_obj.hdr.MeasYaps,'sWiPMemBlock');
-    end
-
-    if strcmp(protocol, "single_echo") || strcmp(protocol, "multi_echo")
-        numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{6};
-        numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{11};
-    else
-        numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{4}; %Change location in KUMC data
-        numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{10}; %Change location in KUMC data
-    end
+    end    
+    numDisSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{6};
+    numGasSpect = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{11}; 
 
     if and(mod(numDisSpect,1)==0,~isempty(numGasSpect))
         containsBonus = 1;
@@ -79,17 +66,174 @@ if contains(filename, 'Dixon', 'IgnoreCase', true) && ~contains(filename, 'BHUTE
     else
         error('ERROR: INCOMPATIBLE INPUT FILE, must be a radial Dixon + cali sequence');
     end
-else
-    error('ERROR: INCOMPATIBLE INPUT FILE, must be a radial Dixon + cali sequence');
-end
 
-%% Extract bonus FIDs and key variables
-[bonusCali] = readBonusSpectra(twix_obj,protocol); %get full res bonus FIDs
+
 Seq_name = twix_obj.hdr.Config.SequenceDescription;
 weight = twix_obj.hdr.Dicom.flUsedPatientWeight;
 freq = twix_obj.hdr.Dicom.lFrequency; 
 te = twix_obj.hdr.Phoenix.alTE{1}; %for now, assuming this is correct TE for bonus FIDs
 dixDwell = twix_obj.hdr.MeasYaps.sRXSPEC.alDwellTime{1,1}*1e-9; %dixon dwell time in seconds
+
+bonusDwell = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{10}*0.5*1e-6; %dwell time in seconds, divide 2 bc oversampling
+calRefVolt = twix_obj.hdr.MeasYaps.sWipMemBlock.alFree{3};
+disTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{7} * 1e-3; %dissolved TR in seconds
+gasTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{12} * 1e-3; %gas TR in seconds 
+
+
+% get scan date
+scanDate = twix_obj.hdr.Phoenix.tReferenceImage0; 
+scanDate = strsplit(scanDate,'.');
+scanDate = scanDate{end};
+scanDateStr = [scanDate(1:4),'-',scanDate(5:6),'-',scanDate(7:8)];
+
+%% Read RF excitation frequency
+% Magnetic Field Strength
+mag_fstrength = twix_obj.hdr.Dicom.flMagneticFieldStrength;
+
+% Read excitation from twix header,Dixon version
+excitation = twix_obj.hdr.Phoenix.sWipMemBlock.alFree{1, 5};
+
+% RF excitation will be in ppm, likeley either 218ppm or 208 ppm at Duke
+rf_excitation_ppm = round(excitation/(gyro_ratio * mag_fstrength));
+
+[bonusCali,numGasSpect,numDisSpect] = readBonusSpectraV2(file_with_path); %get full res bonus FIDs
+
+elseif isMRD
+%% Extract bonus FIDs and key variables
+[bonusCali,numGasSpect,numDisSpect]  = readBonusSpectraV2(file_with_path); %get full res bonus FIDs
+numSpect = numDisSpect+numGasSpect;
+
+    if numSpect > 0
+        containsBonus = 1;
+    else
+        error('ERROR: MRD file is Dixon but has no bonus spectra.');
+    end
+
+
+
+    dset = ismrmrd.Dataset(file_with_path,'dataset');
+    xml  = dset.readxml();
+    hdr  = ismrmrd.xml.deserialize(xml);
+
+    % 1) Seq_name from file naming convention (subjectID_dixon / calibration / proton)
+    if contains(lower(base),'dixon'),       Seq_name = 'Dixon';
+    elseif contains(lower(base),'calibration'), Seq_name = 'Calibration';
+    elseif contains(lower(base),'proton'),  Seq_name = 'Proton';
+    else,                                   Seq_name = 'Unknown (MRD)';
+    end
+
+    % 2) scan date: studyInformation.studyDate (YYYY-MM-DD)
+    try scanDateStr = string(hdr.studyInformation.studyDate); catch, scanDateStr = "N/A"; end
+    scanDateStr = char(scanDateStr);
+
+    % 3) weight: not in spec → leave NaN (unless you store it in userParameters)
+    weight =NaN;
+
+    % 4) TE (ms in MRD) → convert to us to match Twix usage
+    try
+        TE_ms = double(hdr.sequenceParameters.TE);  % ms
+        te    = TE_ms*1e3;                          % us
+    catch, te = NaN; end
+
+    % 5) TRs (ms) → seconds; TR[0] = tr_gas, TR[1] = tr_dis
+    try
+        TRs = double(hdr.sequenceParameters.TR);  % array in ms
+        if numel(TRs) >= 1, gasTR = TRs(1)*1e-3; end   % s
+        if numel(TRs) >= 2, disTR = TRs(2)*1e-3; end   % s
+    catch
+        gasTR = NaN; disTR = NaN;
+    end
+
+    % 6) Xe center frequency & dissolved offset from userParameters (Hz)
+    %    MRD spec: userParameterLong with names 'xe_center_frequency' and 'xe_dissolved_offset_frequency'
+
+    % Defaults
+    xe_center_freq_Hz      = NaN;
+    xe_dissolved_offset_Hz = 0;   % 0 if not provided
+    
+    upl = hdr.userParameters.userParameterLong;
+    
+    % Center frequency
+    idx = strcmpi({upl.name}, 'xe_center_frequency');
+    if any(idx)
+        xe_center_freq_Hz = double(upl(idx).value);
+    end
+    
+    % Dissolved offset frequency
+    idx = strcmpi({upl.name}, 'xe_dissolved_offset_frequency');
+    if any(idx)
+        xe_dissolved_offset_Hz = double(upl(idx).value);
+    end
+
+    % Fallback: if center freq still unknown, use first acquisition's header (common)
+    if isnan(xe_center_freq_Hz)
+        try
+            acq1 = dset.readAcquisition(1);
+            xe_center_freq_Hz = double(acq1.head.center_frequency);
+        catch
+            % leave as NaN if not available
+        end
+    end
+
+    freq = xe_center_freq_Hz;
+
+    % 7) sample_time (us) → s
+    %    Spec says AcquisitionHeader.sample_time_us has value for each FID.
+    %    We'll take it from the first BONUS acquisition (measurement_uid == 1).
+    bonusDwell = NaN; dixDwell = NaN;
+    try
+        nAcq = dset.getNumberOfAcquisitions();
+        for ii = 1:nAcq
+            acq = dset.readAcquisition(ii);
+            if acq.head.measurement_uid == 1
+                st_us = double(acq.head.sample_time_us);
+                bonusDwell = st_us*1e-6;  % s
+                break
+            end
+        end
+        % If no explicit "bonus" found above, fallback to first acq
+        if isnan(bonusDwell)
+            acq = dset.readAcquisition(1);
+            bonusDwell = double(acq.head.sample_time_us)*1e-6;
+        end
+        dixDwell = bonusDwell; % use same dwell proxy for Dixon timing
+    catch
+        bonusDwell = NaN; dixDwell = NaN;
+    end
+
+     % close dataset
+    try dset.close(); catch, end
+
+    % 8) calRefVolt not defined in MRD spec → leave NaN (unless you store it)
+    calRefVolt =NaN;
+
+    
+    % Field strength (T)  [Spec #5]
+    try
+        mag_fstrength = double(hdr.acquisitionSystemInformation.systemFieldStrength_T);
+    catch
+        mag_fstrength = NaN;
+    end
+    
+
+    
+    % Compute RF excitation in ppm (offset relative to gas center)
+    % gyro_ratio is in MHz/T → convert to Hz/T with *1e6
+    if ~isnan(mag_fstrength)
+        rf_excitation_ppm = xe_dissolved_offset_Hz / (gyro_ratio*1e6 * mag_fstrength) * 1e6;
+        rf_excitation_ppm = round(rf_excitation_ppm);
+    else
+        rf_excitation_ppm = NaN;
+end
+   
+else
+    error('Unsupported file type: %s', ext);
+end
+
+else
+    error('ERROR: INCOMPATIBLE INPUT FILE, must be a radial Dixon + cali sequence');
+end
+
 
 % get spec ratios and plot spectral fits
 nDis = numDisSpect; % # dissolved FIDs
@@ -99,25 +243,7 @@ bonusCali = double(bonusCali);
 nPts = size(bonusCali,1); % # pts in each bonus FID
 nFids = numSpect;
 nCal = numGasSpect;
-if strcmp(protocol, "single_echo") || strcmp(protocol, "multi_echo")
-    bonusDwell = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{10}*0.5*1e-6; %dwell time in seconds, divide 2 bc oversampling
-    calRefVolt = twix_obj.hdr.MeasYaps.sWipMemBlock.alFree{3};
-    disTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{7} * 1e-3; %dissolved TR in seconds
-    gasTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{12} * 1e-3; %gas TR in seconds 
-else
-    %Change location in KUMC data
-    bonusDwell = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{15}*0.5*1e-6; %dwell time in seconds, divide 2 bc oversampling
-    calRefVolt = twix_obj.hdr.MeasYaps.sWipMemBlock.alFree{2};
-    disTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{5} * 1e-3; %dissolved TR in seconds
-    gasTR = twix_obj.hdr.MeasYaps.sWipMemBlock.adFree{11} * 1e-3; %gas TR in seconds 
-end
 
-
-% get scan date
-scanDate = twix_obj.hdr.Phoenix.tReferenceImage0; 
-scanDate = strsplit(scanDate,'.');
-scanDate = scanDate{end};
-scanDateStr = [scanDate(1:4),'-',scanDate(5:6),'-',scanDate(7:8)];
 
 % print out key variable values
 fprintf('\n\n');
@@ -147,15 +273,7 @@ disData1_avg = mean(disData1,2); % average of dissolved phase
 calData = bonusCali(:,end-nCal+1:end); % the data left for flip angle calculations
 t = double((0:(length(disData)-1))*bonusDwell');
 
-%% Read RF excitation frequency
-% Magnetic Field Strength
-mag_fstrength = twix_obj.hdr.Dicom.flMagneticFieldStrength;
 
-% Read excitation from twix header,Dixon version
-excitation = twix_obj.hdr.Phoenix.sWipMemBlock.alFree{1, 5};
-
-% RF excitation will be in ppm, likeley either 218ppm or 208 ppm at Duke
-rf_excitation_ppm = round(excitation/(gyro_ratio * mag_fstrength));
 
 %% Fit gas Spectrum
 fprintf('\nAnalysis of Gas FID\n');
@@ -179,7 +297,7 @@ freq_guess = [rbc_freq_adj, mem_freq_adj, gas_freq_adj] * xeFreqMHz; % in Hz
 
 %set all other initial parameter guesses
 area_guess =  [1, 1, 1]; % no benefit seen in tayloring these guesses
-fwhmL_guess = [8.8, 5.0, 1.2] * xeFreqMHz;
+fwhmL_guess = [8.8, 5.0, 2] * xeFreqMHz;
 fwhmG_guess = [0, 6.1, 0] * xeFreqMHz;
 phase_guess = [0, 0, 0]; % no benefit seen in tayloring these guesses
 

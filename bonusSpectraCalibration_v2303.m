@@ -33,11 +33,9 @@ file_with_path = strcat(path, file);  % join path and filename to open
 [~, base, ext] = fileparts(file_with_path);
 isTwix = strcmpi(ext, '.dat');
 isMRD  = any(strcmpi(ext, {'.h5','.mrd'}));
-if isTwix
-    filename = file(15:end-4); % return filename back to something short
-else
-    filename = file(1:end-4); % return filename back to something short
-end
+parts = split(file, '.');        % split by "."
+filename = parts{1}; 
+
 cal_vars_export = [filename,'.csv']; % generate the filename for data comparison
 filename = strrep(filename, '_', '-'); % replace underscores to avoid subscript problems
 file_loc = regexp(path,filesep,'split');

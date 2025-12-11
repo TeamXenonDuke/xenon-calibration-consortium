@@ -26,7 +26,7 @@ save_csv =1; % export derived variables as csv file
 % user control of skipping and averaging
 seconds2skip = 2; %number of seconds to skip in breath hold
 seconds2avg = 1;
-nDis = 500; % Assume consortium standard
+nCal = 20; % Assume consortium standard
 FlipTarget = 20; % target flip angle from calibration
 
 % frequency guesses in ppm for dissolved phase fits
@@ -65,7 +65,7 @@ freq = cali_struct.freq;
 xeFreqMHz = cali_struct.xeFreqMHz;
 theFID = cali_struct.data;
 nFids = size(theFID, 2);
-nCal = nFids-nDis; % assume remaining FIDS past dissolved are cal
+nDis = nFids-nCal; % assume remaining FIDS past dissolved are cal
 nPts = size(theFID, 1);
 VRef = cali_struct.vref;
 scanDateStr = cali_struct.scan_date;

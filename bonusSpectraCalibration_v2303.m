@@ -161,6 +161,7 @@ numSpect = numDisSpect+numGasSpect;
     idx = strcmpi({upl.name}, 'xe_dissolved_offset_frequency');
     if any(idx)
         xe_dissolved_offset_Hz = double(upl(idx).value);
+        excitation = xe_dissolved_offset_Hz;
     end
 
     % Fallback: if center freq still unknown, use first acquisition's header (common)

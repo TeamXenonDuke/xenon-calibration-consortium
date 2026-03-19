@@ -126,6 +126,7 @@ switch file_extension
 
         % calculate rf excitation in ppm
         gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla
+        cali_struct.rf_excitation_Hz = freq_dis_excitation_hz;
         cali_struct.rf_excitation_ppm = round(freq_dis_excitation_hz/(gyro_ratio * field_strength));
 
         % assign nan to variables not in mrd file

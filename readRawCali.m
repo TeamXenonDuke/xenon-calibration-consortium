@@ -15,6 +15,7 @@ function [cali_struct] = readRawCali(raw_path)
 % cali_struct.data = the FID data;
 % cali_struct.scan_date = scan date in format (YYYY-MM-DD) optional;
 % cali_struct.vref = reference voltage (V) optional;
+% cali_struct.rf_excitation_Hz = rf excitation offset in Hz;
 % cali_struct.rf_excitation_ppm = rf excitation in ppm;
 
 cali_struct = {};
@@ -95,6 +96,7 @@ switch file_extension
         cali_struct.data = twix_obj.data;
         cali_struct.scan_date = scanDateStr;
         cali_struct.vref = VRef;
+        cali_struct.rf_excitation_Hz = excitation;
         cali_struct.rf_excitation_ppm = rf_excitation_ppm;
 
     case '.h5'

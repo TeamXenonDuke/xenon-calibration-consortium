@@ -85,14 +85,27 @@ if contains(file, "dixon") || contains(file, "calibration")
 end
 
 %% Extract FID acquisition data and trajectories
+% get contrast and bonus spectra labels
+contrast_labels = dataset.readAcquisition().head.idx.contrast;
+bonus_spectra_labels = dataset.readAcquisition().head.measurement_uid;
 
 % read k-space data
-npts = size(dataset.readAcquisition(1).data{1},1);
 nfids = dataset.getNumberOfAcquisitions;
 fids_cell = dataset.readAcquisition().data;
+
+% Find the first imaging FID to determine the number of points
+for i=1:nfids
+    if ~bonus_spectra_labels(i)
+        npts = size(double(fids_cell{i}(:,1)),1);
+        % Save the index of the first imaging point for plotting
+        first_imaging_point = i;
+        break
+    end
+end
+
 fids = zeros(npts, nfids);
 for i=1:nfids
-    fids(:,i) = transpose(double(fids_cell{i}(:,1)));
+    fids(:,i) = transpose(double(fids_cell{i}(1:npts,1)));
 end
 
 % if data from GE scanner, take complex conjugate
@@ -105,13 +118,9 @@ if contains(file, "proton") || contains(file, "dixon")
     traj_cell = dataset.readAcquisition().traj;
     traj = zeros(nfids, npts, 3);
     for i=1:nfids
-        traj(i,:,:) = transpose(double(traj_cell{i}));
+        traj(i,:,:) = transpose(double(traj_cell{i}(:,1:npts)));
     end
 end
-
-% get contrast and bonus spectra labels
-contrast_labels = dataset.readAcquisition().head.idx.contrast;
-bonus_spectra_labels = dataset.readAcquisition().head.measurement_uid;
 
 %% print out key variables
 
@@ -167,9 +176,14 @@ if first_frames>nfids
     sprintf('\nNumber of plot frames exceeded. Setting to %g\n',first_frames);
 end 
 
-% plot first FIDs
+% Plot the first set of imaging FIDs as one continuous 1D signal
 figure();
-plot(abs(fids(1:first_frames*npts)));
+
+% Flatten the selected FIDs into a single row vector for plotting
+fids_flatten = reshape(abs(fids(:, first_imaging_point:first_imaging_point+first_frames)), 1, []);
+
+% Plot the flattened FID values
+plot(fids_flatten)
 
 % set title and axis labels
 a=sprintf('%s First %0.0f fids',strrep(file, '_', '\_'),first_frames);

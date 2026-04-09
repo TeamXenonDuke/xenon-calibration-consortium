@@ -99,7 +99,7 @@ switch file_extension
         cali_struct.rf_excitation_Hz = excitation;
         cali_struct.rf_excitation_ppm = rf_excitation_ppm;
 
-    case '.h5'
+    case {'.h5','.mrd'}
         % mrd file
 
         % read in mrd file dataset and ismrmrdHeader

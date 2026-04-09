@@ -246,6 +246,29 @@ fprintf('\nRbcMemRatio = %3.3f\n', RbcMemRatio); %
 GasDisRatio = disfitObj.area(3) / sum(disfitObj.area(1:2));
 fprintf('GasDisRatio = %3.3f \n', GasDisRatio);
 
+%% Quantify chemical shift using incidental and dedicated gas references
+% Define variables for calculations
+freqs = disfitObj.freq; % [rbc membrane gas]
+rbcFreq = freqs(1); % RBC frequency in Hz
+memFreq = freqs(2); % Hz
+gasFreq = freqs(3); % Hz    
+disExcitationFreq = cali_struct.rf_excitation_Hz;
+gasOffsetFreq = gasfitObj.freq; % gas freq using dedicated gas peak rf
+
+% Calculate chemical shifts using incidental gas peak
+rbcShiftIncidental = (rbcFreq - gasFreq) / (freq * 1e-6); % rbc shift in ppm
+memShiftIncidental = (memFreq - gasFreq) / (freq * 1e-6); % membrane shift in ppm
+
+% Calculate chemical shifts using dedicated gas peak
+rbcShiftDedicated = (rbcFreq - (gasOffsetFreq - disExcitationFreq)) / (freq * 1e-6); % rbc shift in ppm
+memShiftDedicated = (memFreq - (gasOffsetFreq - disExcitationFreq)) / (freq * 1e-6); % membrane shift in ppm
+
+% Report values to command window
+fprintf('\nRBC shift (incidental): %3.2f\n',rbcShiftIncidental)
+fprintf('RBC shift (dedicated): %3.2f\n',rbcShiftDedicated)
+fprintf('Membrane shift (incidental): %3.2f\n',memShiftIncidental)
+fprintf('Membrane shift (dedicated): %3.2f\n',memShiftDedicated)
+
 %% Save some parameters for comparing if requested
 if save_csv == 1
     folderPath = path; % save the csv file to the same directory as the dat file
@@ -259,7 +282,7 @@ if save_csv == 1
     cal_cali.TE90 = te90;
     cal_cali.RbcMemRatio = RbcMemRatio;
     cal_cali.GasDisRatio = GasDisRatio;
-    cal_cali.RBCShift = (disfitObj.freq(1) - disfitObj.freq(3)) / freq_target * 1e6; %frequency difference between RBC and gas in ppm
+    cal_cali.RBCShift = rbcShiftDedicated;
     cal_cali.RBCSNR = SNRsnf_d(1);
     cal_cali.MemSNR = SNRsnf_d(2);
 

@@ -161,6 +161,7 @@ numSpect = numDisSpect+numGasSpect;
     idx = strcmpi({upl.name}, 'xe_dissolved_offset_frequency');
     if any(idx)
         xe_dissolved_offset_Hz = double(upl(idx).value);
+        excitation = xe_dissolved_offset_Hz;
     end
 
     % Fallback: if center freq still unknown, use first acquisition's header (common)
@@ -414,6 +415,28 @@ fprintf('\nRbcMemRatio = %3.3f\n',RbcMemRatio); %
 GasDisRatio = disfitObj.area(3)/sum(disfitObj.area(1:2));
 fprintf('GasDisRatio = %3.3f\n',GasDisRatio); 
 
+%% Quantify chemical shift using incidental and dedicated gas references
+% Define variables for calculations
+freqs = disfitObj.freq; % [rbc membrane gas]
+rbcFreq = freqs(1); % RBC frequency in Hz
+memFreq = freqs(2); % Hz
+gasFreq = freqs(3); % Hz    
+gasOffsetFreq = gasfitObj.freq; % gas freq using dedicated gas peak rf
+
+% Calculate chemical shifts using incidental gas peak
+rbcShiftIncidental = (rbcFreq - gasFreq) / (freq * 1e-6); % rbc shift in ppm
+memShiftIncidental = (memFreq - gasFreq) / (freq * 1e-6); % membrane shift in ppm
+
+% Calculate chemical shifts using dedicated gas peak
+rbcShiftDedicated = (rbcFreq - (gasOffsetFreq - excitation)) / (freq * 1e-6); % rbc shift in ppm
+memShiftDedicated = (memFreq - (gasOffsetFreq - excitation)) / (freq * 1e-6); % membrane shift in ppm
+
+% Report values to command window
+fprintf('\nRBC shift (incidental): %3.2f\n',rbcShiftIncidental)
+fprintf('RBC shift (dedicated): %3.2f\n',rbcShiftDedicated)
+fprintf('Membrane shift (incidental): %3.2f\n',memShiftIncidental)
+fprintf('Membrane shift (dedicated): %3.2f\n',memShiftDedicated)
+
 %% Save some parameters for comparing
 folderPath = path; % save the csv file to the same directory as the dat file
 fileName = cal_vars_export; % name of the file
@@ -426,7 +449,7 @@ cal_bonus.TrueRefV = calRefVolt*calRefVoltScaleFactor; %reference voltage
 cal_bonus.TE90 = te90/1000;
 cal_bonus.RbcMemRatio = RbcMemRatio;
 cal_bonus.GasDisRatio = GasDisRatio;
-cal_bonus.RBCShift = (disfitObj.freq(1) - disfitObj.freq(3)) / freq_target * 1e6; %frequency difference between RBC and gas in ppm 
+cal_bonus.RBCShift = rbcShiftDedicated;
 cal_bonus.RBCSNR = SNRsnf_d(1);
 cal_bonus.MemSNR = SNRsnf_d(2);
 

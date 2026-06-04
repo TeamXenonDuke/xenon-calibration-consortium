@@ -114,20 +114,44 @@ switch file_extension
         end
 
         % read in variables
-        cali_struct.scan_date = ismrmrd_header.studyInformation.studyDate; % in YYYY-MM-DD
+        cali_struct.scan_date = ismrmrd_header.measurementInformation.seriesDate; % in YYYY-MM-DD
         vendor = ismrmrd_header.acquisitionSystemInformation.systemVendor;
         cali_struct.te = ismrmrd_header.sequenceParameters.TE * 1e3; % in us
-        cali_struct.tr = ismrmrd_header.sequenceParameters.TR(2) * 1e3; % dissolved TR in us
+        % try
+        %     cali_struct.tr = ismrmrd_header.sequenceParameters.TR(2) * 1e3; % dissolved TR in us
+        % catch ME
+        cali_struct.tr = ismrmrd_header.sequenceParameters.TR * 1e3; % dissolved TR in 
+        % end
+
         cali_struct.dwell_time = double(dataset.readAcquisition().head.sample_time_us(1)) * 1e-6; % in s
-        cali_struct.freq = general_user_params_long("xe_center_frequency"); % in Hz
+        try
+            cali_struct.freq = general_user_params_long("xe_center_frequency"); % in Hz
+        catch ME
+            cali_struct.freq = ismrmrd_header.userParameters.userParameterLong.value;
+        end
         cali_struct.xeFreqMHz = cali_struct.freq * 1e-6; % gas excitation frequency in MHz
+
         field_strength = ismrmrd_header.acquisitionSystemInformation.systemFieldStrength_T; % in T
-        freq_dis_excitation_hz = general_user_params_long("xe_dissolved_offset_frequency"); % in Hz
+        
 
         % calculate rf excitation in ppm
         gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla
-        cali_struct.rf_excitation_Hz = freq_dis_excitation_hz;
-        cali_struct.rf_excitation_ppm = round(freq_dis_excitation_hz/(gyro_ratio * field_strength));
+        
+        % cali_struct.rf_excitation_Hz = freq_dis_excitation_hz; % in Hz;
+        try
+            freq_dis_excitation_hz = general_user_params_long("xe_dissolved_offset_frequency"); % in Hz
+            
+        catch ME
+            freq_dis_excitation_hz = ismrmrd_header.userParameters.userParameterDouble.value * (gyro_ratio * field_strength);
+        end
+            cali_struct.rf_excitation_Hz = freq_dis_excitation_hz;
+     
+
+        try
+            cali_struct.rf_excitation_ppm = round(general_user_params_long("xe_dissolved_offset_frequency")/(gyro_ratio * field_strength));
+        catch ME
+            cali_struct.rf_excitation_ppm = ismrmrd_header.userParameters.userParameterDouble.value;
+        end
 
         % assign nan to variables not in mrd file
         cali_struct.seq_name = nan;

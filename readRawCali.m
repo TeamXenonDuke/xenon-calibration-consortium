@@ -80,6 +80,9 @@ switch file_extension
         % Read RF excitation frequency
         mag_fstrength = twix_obj.hdr.Dicom.flMagneticFieldStrength; % Magnetic Field Strength
         excitation = twix_obj.hdr.Phoenix.sWiPMemBlock.alFree{1, 5}; % Read excitation from twix header,Cali version
+        if isempty(excitation)
+            excitation = twix_obj.hdr.Phoenix.sWiPMemBlock.adFree{1, 9};
+        end
         
         % RF excitation will be in ppm, likeley either 218ppm or 208 ppm at Duke
         gyro_ratio = 11.777; % gyromagnetic ratio of 129Xe in MHz/Tesla

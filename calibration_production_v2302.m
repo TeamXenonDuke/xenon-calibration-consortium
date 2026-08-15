@@ -142,8 +142,8 @@ plot(xdata, fitfunct(fitparams, xdata), '-r');
 legend('Acquired', 'Fit');
 xlabel('Frame Number');
 ylabel('Magnitude');
-a = sprintf('Flip Cal: V_{ref} = %0.1f yields flip = %0.1f�%0.1f%c', VRef, flip_angle, flip_err, char(176));
-title(a); % note degree symbol is char(176)
+a = sprintf('Flip Cal: V_{ref} = %0.1f yields flip = %0.1f%c%0.1f%c', VRef, flip_angle, char(177), flip_err, char(176));
+title(a); % note degree symbol is char(176) and +- is char(177)
 pause(1); % had to insert pause to avoid occasional plotting conflicts - don't know why
 
 %% Provide New Reference Amplitude and Warnings

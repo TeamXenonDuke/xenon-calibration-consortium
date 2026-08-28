@@ -23,6 +23,10 @@ clc;clear all;close all;
 disp_fids = 1; % set to 1 to display first (noise) frame and first FID
 save_csv =1; % export derived variables as csv file
 
+% Setting the number of dropping points droppt_N.
+global droppt_N;
+droppt_N = [5]; % Input the number of points you want to drop;
+
 % user control of skipping and averaging
 seconds2skip = 2; %number of seconds to skip in breath hold
 seconds2avg = 1;

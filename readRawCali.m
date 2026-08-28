@@ -21,6 +21,12 @@ function [cali_struct] = readRawCali(raw_path)
 cali_struct = {};
 [~, ~, file_extension] = fileparts(raw_path);
 
+global droppt_N;
+if isempty(droppt_N)
+    disp('droppt_N is empty')
+    droppt_N = 0; % default if not set in main
+end
+
 % Read in twix or P file and define associated variables
 switch file_extension
     case '.dat'
@@ -149,6 +155,11 @@ switch file_extension
         % if data from GE scanner, take complex conjugate
         if strcmpi(vendor,'ge')
             fids = conj(fids);
+        end
+
+        if droppt_N > 0
+            fids = fids(droppt_N + 1:end, :);
+            fids(size(fids, 1):size(fids, 1) + droppt_N, :) = 0;
         end
         
         % add fid data to struct

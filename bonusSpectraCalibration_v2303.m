@@ -179,25 +179,38 @@ numSpect = numDisSpect+numGasSpect;
     % 7) sample_time (us) → s
     %    Spec says AcquisitionHeader.sample_time_us has value for each FID.
     %    We'll take it from the first BONUS acquisition (measurement_uid == 1).
-    bonusDwell = NaN; dixDwell = NaN;
+    bonusDwellDis = NaN; bonusDwellGas = NaN; dixDwell = NaN;
     try
         nAcq = dset.getNumberOfAcquisitions();
         for ii = 1:nAcq
             acq = dset.readAcquisition(ii);
             if acq.head.measurement_uid == 1
                 st_us = double(acq.head.sample_time_us);
-                bonusDwell = st_us*1e-6;  % s
+                bonusDwellDis = st_us*1e-6;  % s
                 break
             end
         end
-        % If no explicit "bonus" found above, fallback to first acq
-        if isnan(bonusDwell)
-            acq = dset.readAcquisition(1);
-            bonusDwell = double(acq.head.sample_time_us)*1e-6;
+        % Gas bonus dwell will be from last bonus FID
+        acq = dset.readAcquisition(nAcq);
+        if acq.head.measurement_uid == 1
+            st_us = double(acq.head.sample_time_us);
+            bonusDwellGas = st_us * 1e-6;
+        else
+            st_us = 20;
+            bonusDwellGas = st_us * 1e-6;
         end
-        dixDwell = bonusDwell; % use same dwell proxy for Dixon timing
+        % If no explicit "bonus" found above, fallback to first acq
+        if isnan(bonusDwellDis)
+            acq = dset.readAcquisition(1);
+            bonusDwellDis = double(acq.head.sample_time_us)*1e-6;
+        end
+        if isnan(bonusDwellGas)
+            acq = dset.readAcquisition(1);
+            bonusDwellGas = double(acq.head.sample_time_us)*1e-6;
+        end
+        dixDwell = bonusDwellDis; % use same dwell proxy for Dixon timing
     catch
-        bonusDwell = NaN; dixDwell = NaN;
+        bonusDwellDis = NaN; bonusDwellGas = NaN; dixDwell = NaN;
     end
 
      % close dataset
@@ -254,7 +267,8 @@ fprintf('\tdisTR = %0.0f us\n',disTR*1e6);
 fprintf('\tgasTR = %0.0f us\n',gasTR*1e6);
 fprintf('\tFrequency = %0.0f Hz\n',freq);
 fprintf('\tReference Voltage = %0.1f V\n',calRefVolt);
-fprintf('\tDwell Time = %0.0f ns\n',bonusDwell*1e9);
+fprintf('\tGas Dwell Time = %0.0f ns\n',bonusDwellGas*1e9);
+fprintf('\tDissolved Dwell Time = %0.0f ns\n',bonusDwellDis*1e9);
 fprintf('\tnPts = %0.0f\n',nPts);
 fprintf('\tnumDisFIDs=%0.0f\n',numDisSpect);
 fprintf('\tnumGasFIDs=%0.0f\n',numGasSpect);
@@ -270,13 +284,14 @@ else
 end 
 disData1_avg = mean(disData1,2); % average of dissolved phase
 calData = bonusCali(:,end-nCal+1:end); % the data left for flip angle calculations
-t = double((0:(length(disData)-1))*bonusDwell');
+t_gas = double((0:(length(disData)-1))*bonusDwellGas');
+t_dis = double((0:(length(disData)-1))*bonusDwellDis');
 
 
 
 %% Fit gas Spectrum
 fprintf('\nAnalysis of Gas FID\n');
-gasfitObj = NMR_TimeFit(gasData,t,1e-4,-84,30,0,0,10000);
+gasfitObj = NMR_TimeFit(gasData,t_gas,1e-4,-84,30,0,0,10000);
 gasfitObj.fitTimeDomainSignal();
 figure('Name','Gas Phase Analysis')
 gasfitObj.plotTimeAndSpectralFit;
@@ -302,10 +317,10 @@ phase_guess = [0, 0, 0]; % no benefit seen in tayloring these guesses
 
 if Voigt == 1
    fprintf('Using Voigt Lineshape to fit Membrane\n');
-   disfitObj = NMR_TimeFit_v(disData1_avg, t, area_guess, freq_guess, fwhmL_guess, fwhmG_guess, phase_guess, [],[]);% first widths lorenzian, 2nd are gauss
+   disfitObj = NMR_TimeFit_v(disData1_avg, t_dis, area_guess, freq_guess, fwhmL_guess, fwhmG_guess, phase_guess, [],[]);% first widths lorenzian, 2nd are gauss
 else
    fprintf('Using Lorentzian Lineshape to fit Membrane\n'); % will work for 218 ppm excitation only
-   disfitObj = NMR_TimeFit(disData1_avg,t,[1 1 1],[0 -700  -7400],[240 240 40],[0 0 0],0,length(t));
+   disfitObj = NMR_TimeFit(disData1_avg,t_dis,[1 1 1],[0 -700  -7400],[240 240 40],[0 0 0],0,length(t_dis));
 end 
 disfitObj = disfitObj.fitTimeDomainSignal();
 figure('Name','Dissolved Phase Analysis')

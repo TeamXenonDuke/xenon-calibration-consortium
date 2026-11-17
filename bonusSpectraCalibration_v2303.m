@@ -267,8 +267,12 @@ fprintf('\tdisTR = %0.0f us\n',disTR*1e6);
 fprintf('\tgasTR = %0.0f us\n',gasTR*1e6);
 fprintf('\tFrequency = %0.0f Hz\n',freq);
 fprintf('\tReference Voltage = %0.1f V\n',calRefVolt);
-fprintf('\tGas Dwell Time = %0.0f ns\n',bonusDwellGas*1e9);
-fprintf('\tDissolved Dwell Time = %0.0f ns\n',bonusDwellDis*1e9);
+try
+    fprintf('\tGas Dwell Time = %0.0f ns\n',bonusDwellGas*1e9);
+    fprintf('\tDissolved Dwell Time = %0.0f ns\n',bonusDwellDis*1e9);
+catch
+    fprintf('\tDwell Time = %0.0f ns\n',bonusDwell*1e9);
+end
 fprintf('\tnPts = %0.0f\n',nPts);
 fprintf('\tnumDisFIDs=%0.0f\n',numDisSpect);
 fprintf('\tnumGasFIDs=%0.0f\n',numGasSpect);
@@ -284,8 +288,13 @@ else
 end 
 disData1_avg = mean(disData1,2); % average of dissolved phase
 calData = bonusCali(:,end-nCal+1:end); % the data left for flip angle calculations
-t_gas = double((0:(length(disData)-1))*bonusDwellGas');
-t_dis = double((0:(length(disData)-1))*bonusDwellDis');
+try
+    t_gas = double((0:(length(disData)-1))*bonusDwellGas');
+    t_dis = double((0:(length(disData)-1))*bonusDwellDis');
+catch
+    t_gas = double((0:(length(disData)-1))*bonusDwell');
+    t_dis = double((0:(length(disData)-1))*bonusDwell');
+end
 
 
 
